@@ -4,6 +4,7 @@ Custom video track for streaming H264 frames via WebRTC.
 
 import asyncio
 import logging
+import threading
 import time
 from fractions import Fraction
 from typing import Optional
@@ -19,6 +20,9 @@ from frame_queue import FrameQueue, VideoFrame as QueueVideoFrame
 from config import DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS
 
 logger = logging.getLogger(__name__)
+
+# Disable threading in FFmpeg to prevent segfaults
+av.logging.set_level(av.logging.ERROR)
 
 
 class iOSVideoTrack(VideoStreamTrack):
@@ -36,6 +40,7 @@ class iOSVideoTrack(VideoStreamTrack):
         # Decoder state
         self.decoder: Optional[CodecContext] = None
         self.decoder_initialized = False
+        self._decoder_lock = threading.Lock()  # Protect decoder access
 
         # Timing
         self.start_time: Optional[float] = None
@@ -49,6 +54,7 @@ class iOSVideoTrack(VideoStreamTrack):
 
         # Last frame for repeat on underflow
         self.last_frame: Optional[VideoFrame] = None
+        self._last_frame_lock = threading.Lock()  # Protect last_frame access
 
         # Stored SPS/PPS for decoder
         self.stored_sps_pps: Optional[bytes] = None
@@ -62,26 +68,33 @@ class iOSVideoTrack(VideoStreamTrack):
 
     def _init_decoder(self, sps_pps: Optional[bytes] = None):
         """Initialize the H264 decoder."""
-        try:
-            self.decoder = av.CodecContext.create('h264', 'r')
-            self.decoder.options = {
-                'flags': '+low_delay',
-                'flags2': '+fast',
-            }
+        with self._decoder_lock:
+            try:
+                self.decoder = av.CodecContext.create('h264', 'r')
+                # Disable all threading in FFmpeg to prevent segfaults
+                # This is critical for stability when running in async context
+                self.decoder.thread_count = 1
+                self.decoder.thread_type = 0  # Disable threading entirely
+                self.decoder.skip_frame = 'NONKEY'  # Skip non-key frames on high load
+                self.decoder.options = {
+                    'flags': '+low_delay',
+                    'flags2': '+fast',
+                    'threads': '1',  # Also set via options
+                }
 
-            # Store SPS/PPS for later use
-            if sps_pps:
-                self.stored_sps_pps = sps_pps
-                logger.info(f"Stored SPS/PPS: {len(sps_pps)} bytes")
-                # Log first few bytes to help debug
-                hex_preview = sps_pps[:20].hex() if len(sps_pps) >= 20 else sps_pps.hex()
-                logger.debug(f"SPS/PPS data preview: {hex_preview}")
+                # Store SPS/PPS for later use
+                if sps_pps:
+                    self.stored_sps_pps = sps_pps
+                    logger.info(f"Stored SPS/PPS: {len(sps_pps)} bytes")
+                    # Log first few bytes to help debug
+                    hex_preview = sps_pps[:20].hex() if len(sps_pps) >= 20 else sps_pps.hex()
+                    logger.debug(f"SPS/PPS data preview: {hex_preview}")
 
-            self.decoder_initialized = True
-            logger.info("H264 decoder initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize decoder: {e}")
-            self.decoder = None
+                self.decoder_initialized = True
+                logger.info("H264 decoder initialized (single-threaded mode)")
+            except Exception as e:
+                logger.error(f"Failed to initialize decoder: {e}")
+                self.decoder = None
 
     def _decode_frame(self, frame_data: QueueVideoFrame) -> Optional[VideoFrame]:
         """Decode H264 NAL units to a video frame."""
@@ -101,55 +114,60 @@ class iOSVideoTrack(VideoStreamTrack):
         if not self.decoder:
             return None
 
-        try:
-            data = frame_data.data
+        with self._decoder_lock:
+            try:
+                data = frame_data.data
 
-            # Debug logging for first few decoded frames
-            if self.frames_sent < 5:
-                hex_preview = data[:30].hex() if len(data) >= 30 else data.hex()
-                logger.info(f"Decoding frame {self.frames_sent}: keyframe={frame_data.is_keyframe}, "
-                           f"size={len(data)}, preview={hex_preview}")
+                # Debug logging for first few decoded frames
+                if self.frames_sent < 5:
+                    hex_preview = data[:30].hex() if len(data) >= 30 else data.hex()
+                    logger.info(f"Decoding frame {self.frames_sent}: keyframe={frame_data.is_keyframe}, "
+                               f"size={len(data)}, preview={hex_preview}")
 
-            # For keyframes, we need SPS/PPS to precede the IDR NAL
-            # The iOS app sends SPS/PPS separately as config, then the keyframe
-            # We need to prepend SPS/PPS to the keyframe for the decoder
-            if frame_data.is_keyframe:
-                sps_pps = frame_data.sps_pps or self.stored_sps_pps
-                if sps_pps:
-                    # Prepend SPS/PPS to the keyframe data
-                    data = sps_pps + data
-                    logger.info(f"Prepended SPS/PPS ({len(sps_pps)} bytes) to keyframe ({len(frame_data.data)} bytes)")
+                # For keyframes, we need SPS/PPS to precede the IDR NAL
+                # The iOS app sends SPS/PPS separately as config, then the keyframe
+                # We need to prepend SPS/PPS to the keyframe for the decoder
+                if frame_data.is_keyframe:
+                    sps_pps = frame_data.sps_pps or self.stored_sps_pps
+                    if sps_pps:
+                        # Prepend SPS/PPS to the keyframe data
+                        data = sps_pps + data
+                        logger.info(f"Prepended SPS/PPS ({len(sps_pps)} bytes) to keyframe ({len(frame_data.data)} bytes)")
 
-            # Create packet from NAL data (should be in Annex-B format with start codes)
-            packet = av.Packet(data)
+                # Create packet from NAL data (should be in Annex-B format with start codes)
+                packet = av.Packet(data)
 
-            # Decode
-            decoded_frames = self.decoder.decode(packet)
+                # Decode - wrap in try/except to catch any FFmpeg crashes
+                try:
+                    decoded_frames = self.decoder.decode(packet)
+                except Exception as decode_err:
+                    logger.error(f"FFmpeg decode error: {decode_err}")
+                    return None
 
-            if decoded_frames:
-                frame = decoded_frames[0]
+                if decoded_frames:
+                    frame = decoded_frames[0]
 
-                # Update dimensions if changed
-                if frame.width != self.width or frame.height != self.height:
-                    self.width = frame.width
-                    self.height = frame.height
-                    logger.info(f"Video dimensions: {self.width}x{self.height}")
+                    # Update dimensions if changed
+                    if frame.width != self.width or frame.height != self.height:
+                        self.width = frame.width
+                        self.height = frame.height
+                        logger.info(f"Video dimensions: {self.width}x{self.height}")
 
-                return frame
+                    return frame
 
-            return None
+                return None
 
-        except Exception as e:
-            self.decode_errors += 1
-            if self.decode_errors <= 10:
-                # More detailed error logging
-                hex_preview = frame_data.data[:30].hex() if len(frame_data.data) >= 30 else frame_data.data.hex()
-                logger.warning(f"Decode error ({self.decode_errors}): {e}")
-                logger.warning(f"  Frame data: keyframe={frame_data.is_keyframe}, size={len(frame_data.data)}")
-                logger.warning(f"  Data preview: {hex_preview}")
-            elif self.decode_errors == 11:
-                logger.warning("Suppressing further decode errors...")
-            return None
+            except Exception as e:
+                self.decode_errors += 1
+                if self.decode_errors <= 10:
+                    # More detailed error logging
+                    hex_preview = frame_data.data[:30].hex() if len(frame_data.data) >= 30 else frame_data.data.hex()
+                    logger.warning(f"Decode error ({self.decode_errors}): {e}")
+                    logger.warning(f"  Frame data: keyframe={frame_data.is_keyframe}, size={len(frame_data.data)}")
+                    logger.warning(f"  Data preview: {hex_preview}")
+                elif self.decode_errors == 11:
+                    logger.warning("Suppressing further decode errors...")
+                return None
 
     def _create_blank_frame(self) -> VideoFrame:
         """Create a blank frame for when no video is available."""
@@ -193,21 +211,37 @@ class iOSVideoTrack(VideoStreamTrack):
             frame = None
             if queue_frame:
                 logger.debug(f"Got frame from queue: keyframe={queue_frame.is_keyframe}, size={len(queue_frame.data)}")
-                frame = self._decode_frame(queue_frame)
-                if frame:
-                    self.last_frame = frame
-                    self.frames_sent += 1
-                    if self.frames_sent <= 5:
-                        logger.info(f"Successfully decoded frame {self.frames_sent}")
+                decoded = self._decode_frame(queue_frame)
+                if decoded:
+                    # CRITICAL: Create a deep copy of the frame to prevent segfaults
+                    # The H.264 decoder reuses internal buffers, and aiortc accesses
+                    # frames from a different thread. We must copy the data.
+                    try:
+                        # Convert to numpy array and back to create a fully independent copy
+                        # This ensures the frame data is completely owned by us
+                        arr = decoded.to_ndarray(format='rgb24')
+                        frame = VideoFrame.from_ndarray(arr, format='rgb24')
+                        frame = frame.reformat(format='yuv420p')
+
+                        with self._last_frame_lock:
+                            self.last_frame = frame
+
+                        self.frames_sent += 1
+                        if self.frames_sent <= 5:
+                            logger.info(f"Successfully decoded frame {self.frames_sent}")
+                    except Exception as copy_err:
+                        logger.warning(f"Failed to copy frame: {copy_err}")
+                        frame = None
 
             # If no frame decoded, use last frame or blank
             if frame is None:
-                if self.last_frame is not None:
-                    frame = self.last_frame
-                else:
-                    frame = self._create_blank_frame()
-                    if self.frame_count <= 5:
-                        logger.debug("Using blank frame (no decoded frame available)")
+                with self._last_frame_lock:
+                    if self.last_frame is not None:
+                        frame = self.last_frame
+                    else:
+                        frame = self._create_blank_frame()
+                        if self.frame_count <= 5:
+                            logger.debug("Using blank frame (no decoded frame available)")
 
             # Set timing info
             frame.pts = self.pts

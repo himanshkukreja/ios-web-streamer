@@ -1,4 +1,4 @@
-/* iOS Simulator Stream Viewer Styles */
+/* iOS Device Stream Viewer Styles */
 
 :root {
     --bg-primary: #0f0f1a;
@@ -34,7 +34,7 @@ body {
 
 #container {
     width: 100%;
-    max-width: 800px;
+    max-width: 900px;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -48,6 +48,12 @@ header {
     align-items: center;
     flex-wrap: wrap;
     gap: 10px;
+}
+
+.status-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 h1 {
@@ -105,21 +111,86 @@ h1 {
     background: var(--success);
 }
 
+.status.partial {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--warning);
+}
+
+.status.partial .status-dot {
+    background: var(--warning);
+}
+
+#control-status {
+    font-size: 12px;
+    padding: 6px 12px;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
 
+/* Video Wrapper with Controls */
+#video-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+}
+
+/* iPhone Frame */
+.iphone-frame {
+    position: relative;
+    background: linear-gradient(145deg, #3a3a4e, #1e1e2e);
+    border-radius: 50px;
+    padding: 14px;
+    box-shadow:
+        0 25px 80px rgba(0, 0, 0, 0.6),
+        inset 0 2px 2px rgba(255, 255, 255, 0.08),
+        inset 0 -2px 2px rgba(0, 0, 0, 0.2);
+    border: 2px solid rgba(60, 60, 80, 0.5);
+}
+
+/* Notch - Hidden since iOS already shows its own status bar */
+.notch {
+    display: none;
+}
+
+.notch-speaker,
+.notch-camera {
+    display: none;
+}
+
+/* Home indicator - Hidden since iOS shows its own */
+.home-indicator {
+    display: none;
+}
+
+/* Side buttons - Hidden for cleaner look */
+.side-btn {
+    display: none;
+}
+
 /* Video Container */
 #video-container {
     position: relative;
-    background: var(--bg-secondary);
-    border-radius: var(--border-radius);
+    background: #000;
+    border-radius: 38px;
     overflow: hidden;
-    aspect-ratio: 9 / 16;
+    aspect-ratio: 9 / 19.5;
     max-height: 70vh;
-    margin: 0 auto;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+.iphone-frame:hover {
+    box-shadow:
+        0 30px 90px rgba(0, 0, 0, 0.7),
+        0 0 60px rgba(79, 70, 229, 0.15),
+        inset 0 2px 2px rgba(255, 255, 255, 0.08),
+        inset 0 -2px 2px rgba(0, 0, 0, 0.2);
 }
 
 #video {
@@ -127,6 +198,90 @@ h1 {
     height: 100%;
     object-fit: contain;
     background: #000;
+    pointer-events: none;
+}
+
+/* Device Control Buttons */
+#device-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 10px;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+}
+
+.btn-control {
+    width: 60px;
+    height: 60px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: var(--bg-tertiary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.btn-control:hover:not(:disabled) {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--accent);
+    transform: scale(1.05);
+}
+
+.btn-control:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.btn-control.btn-home {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, var(--bg-tertiary), var(--bg-secondary));
+    border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.btn-control.btn-home:hover:not(:disabled) {
+    border-color: var(--accent);
+    box-shadow: 0 0 25px rgba(79, 70, 229, 0.4);
+}
+
+/* SVG Icons in buttons - ensure visibility */
+.btn-control svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+    display: block;
+    flex-shrink: 0;
+}
+
+.btn-control svg path {
+    fill: currentColor;
+}
+
+.btn-control.btn-home svg {
+    width: 28px;
+    height: 28px;
+}
+
+/* Button labels */
+.btn-label {
+    font-size: 9px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-top: 2px;
 }
 
 .overlay {
@@ -155,6 +310,8 @@ h1 {
 .overlay-content svg {
     margin-bottom: 16px;
     opacity: 0.5;
+    stroke: currentColor;
+    fill: none;
 }
 
 .overlay-content p {
@@ -260,6 +417,12 @@ footer {
     font-size: 12px;
 }
 
+#control-hint {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
 /* Fullscreen styles */
 #video-container:fullscreen {
     max-height: none;
@@ -272,7 +435,7 @@ footer {
 }
 
 /* Responsive */
-@media (max-width: 600px) {
+@media (max-width: 700px) {
     #container {
         padding: 16px;
     }
@@ -281,8 +444,54 @@ footer {
         font-size: 20px;
     }
 
+    .status-row {
+        width: 100%;
+        justify-content: center;
+    }
+
+    header {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    #video-wrapper {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    #device-controls {
+        flex-direction: row;
+        justify-content: center;
+        padding: 10px 0;
+        gap: 10px;
+    }
+
+    .control-group {
+        flex-direction: row;
+        gap: 8px;
+    }
+
+    .btn-control {
+        width: 50px;
+        height: 50px;
+    }
+
+    .btn-control.btn-home {
+        width: 56px;
+        height: 56px;
+    }
+
+    .btn-label {
+        font-size: 8px;
+    }
+
+    .iphone-frame {
+        border-radius: 40px;
+        padding: 10px;
+    }
+
     #video-container {
-        border-radius: 8px;
+        border-radius: 32px;
     }
 
     #stats-bar {
@@ -302,6 +511,14 @@ footer {
         padding: 10px 20px;
         font-size: 14px;
     }
+
+    #control-hint {
+        text-align: center;
+    }
+
+    .side-btn {
+        display: none;
+    }
 }
 
 /* Landscape mobile */
@@ -317,9 +534,13 @@ footer {
         width: 100%;
     }
 
+    .iphone-frame {
+        max-height: 80vh;
+    }
+
     #video-container {
         flex: 1;
-        max-height: 80vh;
+        max-height: 75vh;
         aspect-ratio: auto;
     }
 

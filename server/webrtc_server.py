@@ -11,9 +11,10 @@ from aiohttp import web
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer
 from aiortc.contrib.media import MediaRelay
 
-from config import ICE_SERVERS, HTTP_HOST, HTTP_PORT
+from config import ICE_SERVERS, HTTP_HOST, HTTP_PORT, WDA_HOST, WDA_PORT
 from frame_queue import FrameQueue
 from video_track import iOSVideoTrack, TestVideoTrack, MediaFileTrack
+from control_server import ControlServer, set_control_server
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class WebRTCServer:
     - Multiple concurrent viewers via MediaRelay
     """
 
-    def __init__(self, frame_queue: FrameQueue):
+    def __init__(self, frame_queue: FrameQueue, enable_control: bool = True):
         self.frame_queue = frame_queue
         self.peer_connections: Set[RTCPeerConnection] = set()
         self.relay = MediaRelay()
@@ -37,6 +38,10 @@ class WebRTCServer:
         self.video_track: Optional[iOSVideoTrack] = None
         self.test_mode = False
         self.media_file: Optional[str] = None
+
+        # Control server for remote control via WDA
+        self.control_server: Optional[ControlServer] = None
+        self.enable_control = enable_control
 
         # HTTP app
         self.app = web.Application()
@@ -53,6 +58,8 @@ class WebRTCServer:
         self.app.router.add_post('/offer', self.handle_offer)
         self.app.router.add_get('/stats', self.handle_stats)
         self.app.router.add_get('/health', self.handle_health)
+        self.app.router.add_get('/control', self.handle_control_websocket)
+        self.app.router.add_get('/control/status', self.handle_control_status)
 
     def _get_rtc_configuration(self) -> RTCConfiguration:
         """Get RTC configuration with ICE servers."""
@@ -172,6 +179,35 @@ class WebRTCServer:
         """Health check endpoint."""
         return web.json_response({'status': 'healthy'})
 
+    async def handle_control_websocket(self, request: web.Request) -> web.WebSocketResponse:
+        """Handle WebSocket connection for device control."""
+        if self.control_server:
+            return await self.control_server.handle_control_websocket(request)
+        else:
+            ws = web.WebSocketResponse()
+            await ws.prepare(request)
+            await ws.send_json({
+                "type": "error",
+                "error": "Control server not available"
+            })
+            await ws.close()
+            return ws
+
+    async def handle_control_status(self, request: web.Request) -> web.Response:
+        """Return control server status."""
+        if self.control_server:
+            return web.json_response({
+                "enabled": True,
+                "wdaConnected": self.control_server.wda_client.is_connected,
+                "screenWidth": self.control_server.wda_client.screen_width,
+                "screenHeight": self.control_server.wda_client.screen_height,
+            })
+        else:
+            return web.json_response({
+                "enabled": False,
+                "wdaConnected": False,
+            })
+
     async def _cleanup_peer_connection(self, pc: RTCPeerConnection):
         """Clean up a peer connection."""
         self.peer_connections.discard(pc)
@@ -180,6 +216,13 @@ class WebRTCServer:
 
     async def start(self, host: str = HTTP_HOST, port: int = HTTP_PORT):
         """Start the HTTP/WebRTC server."""
+        # Initialize control server if enabled
+        if self.enable_control:
+            self.control_server = ControlServer(WDA_HOST, WDA_PORT)
+            set_control_server(self.control_server)
+            await self.control_server.start()
+            logger.info(f"Control server initialized (WDA: {WDA_HOST}:{WDA_PORT})")
+
         runner = web.AppRunner(self.app)
         await runner.setup()
         site = web.TCPSite(runner, host, port)
@@ -192,6 +235,10 @@ class WebRTCServer:
     async def shutdown(self):
         """Shutdown the server and close all connections."""
         logger.info("Shutting down WebRTC server...")
+
+        # Stop control server if running
+        if self.control_server:
+            await self.control_server.stop()
 
         # Close all peer connections
         coros = [pc.close() for pc in self.peer_connections]

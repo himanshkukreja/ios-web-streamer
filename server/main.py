@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-iOS Simulator Screen Streaming Server
+iOS Screen Streaming Server
 
 This server receives H264 video frames from an iOS Broadcast Extension
 via WebSocket and streams them to web browsers via WebRTC.
 
 Usage:
-    python main.py [--test] [--media FILE] [--port PORT]
+    python main.py [--test] [--media FILE] [--port PORT] [--no-control]
 
 Options:
-    --test      Run in test mode with generated video (no iOS required)
-    --media     Stream a media file (mp4, mkv, etc) instead of iOS
-    --port      HTTP server port (default: 8999)
+    --test          Run in test mode with generated video (no iOS required)
+    --media         Stream a media file (mp4, mkv, etc) instead of iOS
+    --port          HTTP server port (default: 8999)
+    --no-control    Disable device control via WebDriverAgent
 """
 
 import argparse
@@ -39,17 +40,19 @@ class StreamingServer:
     Main server class that coordinates iOS receiver and WebRTC server.
     """
 
-    def __init__(self, http_port: int = HTTP_PORT, test_mode: bool = False, media_file: str = None):
+    def __init__(self, http_port: int = HTTP_PORT, test_mode: bool = False,
+                 media_file: str = None, enable_control: bool = True):
         self.http_port = http_port
         self.test_mode = test_mode
         self.media_file = media_file
+        self.enable_control = enable_control
 
         # Shared frame queue
         self.frame_queue = FrameQueue(max_size=FRAME_QUEUE_MAX_SIZE)
 
         # Components
         self.ios_receiver = iOSReceiver(self.frame_queue)
-        self.webrtc_server = WebRTCServer(self.frame_queue)
+        self.webrtc_server = WebRTCServer(self.frame_queue, enable_control=enable_control)
 
         if media_file:
             self.webrtc_server.set_media_file(media_file)
@@ -94,6 +97,10 @@ class StreamingServer:
         else:
             logger.info(f"WebSocket (iOS):  ws://localhost:{WEBSOCKET_PORT}")
             logger.info(f"HTTP (Viewers):   http://0.0.0.0:{self.http_port}")
+            if self.enable_control:
+                logger.info("Device Control:   Enabled (WebDriverAgent)")
+            else:
+                logger.info("Device Control:   Disabled")
             logger.info("")
             logger.info("Waiting for iOS Broadcast Extension to connect...")
             logger.info("=" * 60)
@@ -113,11 +120,12 @@ class StreamingServer:
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description='iOS Simulator Screen Streaming Server')
+    parser = argparse.ArgumentParser(description='iOS Screen Streaming Server')
     parser.add_argument('--test', action='store_true', help='Run in test mode with generated video')
     parser.add_argument('--media', type=str, metavar='FILE', help='Stream a media file (mp4, mkv, etc)')
     parser.add_argument('--port', type=int, default=HTTP_PORT, help=f'HTTP server port (default: {HTTP_PORT})')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument('--no-control', action='store_true', help='Disable device control via WebDriverAgent')
     args = parser.parse_args()
 
     if args.debug:
@@ -130,8 +138,16 @@ async def main():
             logger.error(f"Media file not found: {args.media}")
             sys.exit(1)
 
+    # Determine if control should be enabled
+    enable_control = not args.no_control
+
     # Create server
-    server = StreamingServer(http_port=args.port, test_mode=args.test, media_file=args.media)
+    server = StreamingServer(
+        http_port=args.port,
+        test_mode=args.test,
+        media_file=args.media,
+        enable_control=enable_control
+    )
 
     # Handle shutdown signals
     loop = asyncio.get_event_loop()
