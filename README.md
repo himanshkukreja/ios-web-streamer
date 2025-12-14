@@ -12,8 +12,6 @@ Stream and control your iOS device in real-time from any web browser. This proje
 - ✅ Low-latency WebRTC video delivery with hardware H264 encoding
 - ✅ Device control via WebDriverAgent (tap, swipe, volume, home button)
 - ✅ Device information display (model, system version, battery, screen resolution)
-- ✅ Auto-lock prevention during broadcast
-- ✅ Multi-viewer support with synchronized playback
 
 ---
 
