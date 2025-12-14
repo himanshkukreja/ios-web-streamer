@@ -4,7 +4,7 @@ Stream and control your iOS device in real-time from any web browser. This proje
 
 ## 🎬 Demo
 
-![Demo Preview](docs/demo-preview.gif)
+![Demo Preview](docs/demo-preview-hq.gif)
 
 **[▶️ Watch Full Demo Video (1:20)](docs/demo.mov)**
 
