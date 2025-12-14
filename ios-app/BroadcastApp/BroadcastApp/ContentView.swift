@@ -1,5 +1,7 @@
 import SwiftUI
 import ReplayKit
+import UIKit
+import AVFoundation
 
 struct ContentView: View {
     @StateObject private var broadcastManager = BroadcastManager()
@@ -7,52 +9,68 @@ struct ContentView: View {
     @State private var serverPort = String(Constants.Server.port)
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                // Status Section
-                StatusCard(isConnected: broadcastManager.isConnected,
-                          isBroadcasting: broadcastManager.isBroadcasting)
+        VStack(spacing: 24) {
+            // Status Section
+            StatusCard(isConnected: broadcastManager.isConnected,
+                      isBroadcasting: broadcastManager.isBroadcasting)
+                .padding(.horizontal)
+                .padding(.top)
 
-                // Broadcast Picker
-                VStack(spacing: 12) {
-                    Text("Start Broadcast")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
+            // Broadcast Picker
+            VStack(spacing: 12) {
+                Text("Start Broadcast")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
 
-                    BroadcastPickerRepresentable()
-                        .frame(width: 80, height: 80)
+                BroadcastPickerRepresentable()
+                    .frame(width: 80, height: 80)
 
-                    Text("Tap the circle above")
+                Text("Tap the circle above")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(16)
+            .shadow(color: .black.opacity(0.1), radius: 10)
+            .padding(.horizontal)
+
+            // Server Configuration
+            ServerConfigView(host: $serverHost, port: $serverPort)
+                .padding(.horizontal)
+
+            // Auto-lock info (when broadcasting)
+            if broadcastManager.isBroadcasting {
+                VStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.open.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        Text("Auto-lock disabled during broadcast")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                    Text("Screen will not auto-lock while broadcasting")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
                 .padding()
-                .background(Color(.systemBackground))
-                .cornerRadius(16)
-                .shadow(color: .black.opacity(0.1), radius: 10)
-
-                // Server Configuration
-                ServerConfigView(host: $serverHost, port: $serverPort)
-
-                // Stats (when broadcasting)
-                if broadcastManager.isBroadcasting {
-                    StatsView(frameCount: broadcastManager.frameCount,
-                             fps: broadcastManager.currentFPS)
-                }
-
-                Spacer()
-
-                // Instructions
-                InstructionsView()
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
+                .padding(.horizontal)
             }
-            .padding()
-            .navigationTitle("Screen Streamer")
-            .onAppear {
-                loadSettings()
-            }
-            .onChange(of: serverHost) { _ in saveSettings() }
-            .onChange(of: serverPort) { _ in saveSettings() }
+
+            Spacer()
+
+            // Instructions
+            InstructionsView()
+                .padding(.horizontal)
         }
+        .onAppear {
+            loadSettings()
+        }
+        .onChange(of: serverHost) { _ in saveSettings() }
+        .onChange(of: serverPort) { _ in saveSettings() }
     }
 
     private func loadSettings() {
@@ -323,8 +341,9 @@ struct InstructionsView: View {
 class BroadcastManager: ObservableObject {
     @Published var isConnected = false
     @Published var isBroadcasting = false
-    @Published var frameCount = 0
-    @Published var currentFPS: Double = 0
+
+    private var previousBroadcastState = false
+    private var audioPlayer: AVAudioPlayer?
 
     init() {
         // Observe broadcast state from UserDefaults (set by extension)
@@ -344,9 +363,104 @@ class BroadcastManager: ObservableObject {
     @objc private func checkBroadcastState() {
         if let defaults = UserDefaults(suiteName: Constants.appGroupIdentifier) {
             DispatchQueue.main.async {
-                self.isBroadcasting = defaults.bool(forKey: Constants.UserDefaultsKeys.isBroadcasting)
+                let newBroadcastState = defaults.bool(forKey: Constants.UserDefaultsKeys.isBroadcasting)
+                let newConnectionState = defaults.bool(forKey: Constants.UserDefaultsKeys.isServerConnected)
+
+                // Update connection state
+                self.isConnected = newConnectionState
+
+                // Update broadcast state and handle idle timer
+                if newBroadcastState != self.previousBroadcastState {
+                    self.previousBroadcastState = newBroadcastState
+                    self.isBroadcasting = newBroadcastState
+                    self.updateIdleTimer(enabled: newBroadcastState)
+                }
             }
         }
+    }
+
+    private func updateIdleTimer(enabled: Bool) {
+        if enabled {
+            // Disable auto-lock
+            UIApplication.shared.isIdleTimerDisabled = true
+
+            // Play silent audio in background to keep app alive
+            // This prevents auto-lock even when app is backgrounded
+            playSilentAudio()
+        } else {
+            // Re-enable auto-lock
+            UIApplication.shared.isIdleTimerDisabled = false
+
+            // Stop silent audio
+            stopSilentAudio()
+        }
+    }
+
+    private func playSilentAudio() {
+        // Create a silent audio file in memory
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try audioSession.setActive(true)
+
+            // Create a silent 1-second audio buffer
+            let silenceURL = createSilentAudio()
+            audioPlayer = try AVAudioPlayer(contentsOf: silenceURL)
+            audioPlayer?.numberOfLoops = -1 // Loop indefinitely
+            audioPlayer?.volume = 0.0 // Silent
+            audioPlayer?.play()
+        } catch {
+            print("Failed to start silent audio: \(error)")
+        }
+    }
+
+    private func stopSilentAudio() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+
+        do {
+            try AVAudioSession.sharedInstance().setActive(false)
+        } catch {
+            print("Failed to deactivate audio session: \(error)")
+        }
+    }
+
+    private func createSilentAudio() -> URL {
+        // Create a temporary silent audio file
+        let tempDir = FileManager.default.temporaryDirectory
+        let silentAudioURL = tempDir.appendingPathComponent("silent.wav")
+
+        // Check if file already exists
+        if FileManager.default.fileExists(atPath: silentAudioURL.path) {
+            return silentAudioURL
+        }
+
+        // Create a simple WAV file with 1 second of silence
+        // WAV header for 1 second of silence at 44.1kHz, 16-bit, mono
+        var wavData = Data()
+
+        // RIFF header
+        wavData.append(contentsOf: "RIFF".utf8)
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(36 + 44100 * 2).littleEndian) { Data($0) })
+        wavData.append(contentsOf: "WAVE".utf8)
+
+        // fmt subchunk
+        wavData.append(contentsOf: "fmt ".utf8)
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Data($0) })
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Data($0) }) // PCM
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Data($0) }) // Mono
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(44100).littleEndian) { Data($0) }) // Sample rate
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(88200).littleEndian) { Data($0) }) // Byte rate
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt16(2).littleEndian) { Data($0) }) // Block align
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt16(16).littleEndian) { Data($0) }) // Bits per sample
+
+        // data subchunk
+        wavData.append(contentsOf: "data".utf8)
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(44100 * 2).littleEndian) { Data($0) })
+        wavData.append(Data(repeating: 0, count: 44100 * 2)) // 1 second of silence
+
+        try? wavData.write(to: silentAudioURL)
+        return silentAudioURL
     }
 }
 

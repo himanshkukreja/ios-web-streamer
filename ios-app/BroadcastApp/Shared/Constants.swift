@@ -41,5 +41,6 @@ enum Constants {
         static let serverPort = "serverPort"
         static let videoBitrate = "videoBitrate"
         static let isBroadcasting = "isBroadcasting"
+        static let isServerConnected = "isServerConnected"
     }
 }
