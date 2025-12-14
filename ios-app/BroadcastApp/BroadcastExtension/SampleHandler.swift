@@ -49,6 +49,7 @@ class SampleHandler: RPBroadcastSampleHandler {
 
         webSocket?.onConnect = { [weak self] in
             self?.logger.info("WebSocket connected")
+            self?.updateServerConnectionState(true)
         }
 
         webSocket?.onDisconnect = { [weak self] error in
@@ -57,6 +58,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             } else {
                 self?.logger.info("WebSocket disconnected")
             }
+            self?.updateServerConnectionState(false)
         }
 
         webSocket?.onError = { [weak self] error in
@@ -96,6 +98,7 @@ class SampleHandler: RPBroadcastSampleHandler {
 
         // Update shared state
         updateBroadcastState(false)
+        updateServerConnectionState(false)
 
         // Log final stats
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
@@ -223,6 +226,12 @@ class SampleHandler: RPBroadcastSampleHandler {
     private func updateBroadcastState(_ isBroadcasting: Bool) {
         if let defaults = UserDefaults(suiteName: Constants.appGroupIdentifier) {
             defaults.set(isBroadcasting, forKey: Constants.UserDefaultsKeys.isBroadcasting)
+        }
+    }
+
+    private func updateServerConnectionState(_ isConnected: Bool) {
+        if let defaults = UserDefaults(suiteName: Constants.appGroupIdentifier) {
+            defaults.set(isConnected, forKey: Constants.UserDefaultsKeys.isServerConnected)
         }
     }
 
