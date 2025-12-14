@@ -17,6 +17,7 @@ from config import (
     MSG_TYPE_CONFIG,
     MSG_TYPE_HEARTBEAT,
     MSG_TYPE_STATS,
+    MSG_TYPE_DEVICE_INFO,
     MSG_TYPE_END_STREAM,
 )
 from frame_queue import FrameQueue, VideoFrame
@@ -45,6 +46,9 @@ class iOSReceiver:
         self.sps_pps: Optional[bytes] = None
         self.frame_count = 0
         self.start_time: Optional[float] = None
+
+        # Device information
+        self.device_info: Optional[dict] = None
 
     async def start(self, host: str = WEBSOCKET_HOST, port: int = WEBSOCKET_PORT):
         """Start the WebSocket server."""
@@ -112,6 +116,8 @@ class iOSReceiver:
             await self._handle_heartbeat()
         elif msg_type == MSG_TYPE_STATS:
             await self._handle_stats(payload)
+        elif msg_type == MSG_TYPE_DEVICE_INFO:
+            await self._handle_device_info(payload)
         elif msg_type == MSG_TYPE_END_STREAM:
             await self._handle_end_stream()
         else:
@@ -180,6 +186,20 @@ class iOSReceiver:
             logger.info(f"iOS stats: {stats}")
         except Exception as e:
             logger.warning(f"Failed to parse stats: {e}")
+
+    async def _handle_device_info(self, payload: bytes):
+        """Handle device info message from iOS."""
+        try:
+            import json
+            self.device_info = json.loads(payload.decode('utf-8'))
+            logger.info(f"📱 Device Info Received:")
+            logger.info(f"  Device: {self.device_info.get('deviceName', 'Unknown')}")
+            logger.info(f"  Model: {self.device_info.get('deviceModel', 'Unknown')}")
+            logger.info(f"  System: {self.device_info.get('systemName', 'Unknown')} {self.device_info.get('systemVersion', 'Unknown')}")
+            logger.info(f"  Resolution: {self.device_info.get('screenResolution', 'Unknown')} @ {self.device_info.get('screenScale', 'Unknown')}")
+            logger.info(f"  Battery: {self.device_info.get('batteryLevel', -1)}% ({self.device_info.get('batteryState', 'unknown')})")
+        except Exception as e:
+            logger.warning(f"Failed to parse device info: {e}")
 
     async def _handle_end_stream(self):
         """Handle end of stream message."""

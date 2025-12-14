@@ -32,6 +32,7 @@ enum Constants {
         case config = 0x02
         case heartbeat = 0x03
         case stats = 0x04
+        case deviceInfo = 0x05
         case endStream = 0xFF
     }
 
