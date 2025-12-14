@@ -30,6 +30,21 @@ DEFAULT_BITRATE = 2_000_000  # 2 Mbps
 CONNECTION_TIMEOUT = 10  # seconds
 HEARTBEAT_INTERVAL = 5  # seconds
 
+# WebDriverAgent settings (for device control)
+# WDA runs on the iOS device and provides REST API for touch/gesture control
+#
+# For USB connection (requires iproxy):
+#   WDA_HOST = "localhost"
+#   WDA_PORT = 8100
+#
+# For WiFi connection (no USB needed):
+#   WDA_HOST = "YOUR_DEVICE_IP"  # e.g., "192.168.1.100"
+#   WDA_PORT = 8100
+#
+# You can find your device IP in Settings > Wi-Fi > (i) icon
+WDA_HOST = "localhost"  # Change to device IP for wireless
+WDA_PORT = 8100
+
 # Message types (must match iOS)
 MSG_TYPE_VIDEO_FRAME = 0x01
 MSG_TYPE_CONFIG = 0x02

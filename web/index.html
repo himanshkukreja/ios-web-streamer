@@ -3,31 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iOS Simulator Stream</title>
-    <link rel="stylesheet" href="style.css">
+    <title>iOS Device Stream</title>
+    <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
     <div id="container">
         <header>
-            <h1>iOS Simulator Stream</h1>
-            <div id="status" class="status disconnected">
-                <span class="status-dot"></span>
-                <span class="status-text">Disconnected</span>
+            <h1>iOS Device Stream</h1>
+            <div class="status-row">
+                <div id="status" class="status disconnected">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Disconnected</span>
+                </div>
+                <div id="control-status" class="status disconnected">
+                    <span class="status-dot"></span>
+                    <span id="control-status-text">Controls Disabled</span>
+                </div>
             </div>
         </header>
 
         <main>
-            <div id="video-container">
-                <video id="video" autoplay playsinline muted></video>
-                <div id="no-stream" class="overlay">
-                    <div class="overlay-content">
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                            <line x1="8" y1="21" x2="16" y2="21"></line>
-                            <line x1="12" y1="17" x2="12" y2="21"></line>
-                        </svg>
-                        <p>Waiting for iOS stream...</p>
-                        <small>Start a broadcast from the iOS app</small>
+            <div id="video-wrapper">
+                <div class="iphone-frame">
+                    <!-- Side buttons for visual frame effect -->
+                    <div class="side-btn side-btn-silent"></div>
+                    <div class="side-btn side-btn-vol-up"></div>
+                    <div class="side-btn side-btn-vol-down"></div>
+                    <div class="side-btn side-btn-power"></div>
+                    <div id="video-container">
+                        <video id="video" autoplay playsinline muted></video>
+                        <div id="no-stream" class="overlay">
+                            <div class="overlay-content">
+                                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                                </svg>
+                                <p>Waiting for iOS stream...</p>
+                                <small>Start a broadcast from the iOS app</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="device-controls">
+                    <div class="control-group">
+                        <button id="volumeUpBtn" class="btn btn-control" title="Volume Up">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                            </svg>
+                            <span class="btn-label">Vol+</span>
+                        </button>
+                        <button id="volumeDownBtn" class="btn btn-control" title="Volume Down">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>
+                            </svg>
+                            <span class="btn-label">Vol-</span>
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="homeBtn" class="btn btn-control btn-home" title="Go to Home Screen">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                            </svg>
+                            <span class="btn-label">Home</span>
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="keyboardBtn" class="btn btn-control" title="Type Text">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/>
+                            </svg>
+                            <span class="btn-label">Type</span>
+                        </button>
+                        <button id="lockBtn" class="btn btn-control" title="Lock Screen">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                            </svg>
+                            <span class="btn-label">Lock</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -55,16 +109,19 @@
         <footer>
             <div id="controls">
                 <button id="connectBtn" class="btn btn-primary">
-                    <span class="btn-icon">▶</span>
+                    <span class="btn-icon">&#9654;</span>
                     Connect
                 </button>
                 <button id="fullscreenBtn" class="btn btn-secondary" disabled>
-                    <span class="btn-icon">⛶</span>
+                    <span class="btn-icon">&#9974;</span>
                     Fullscreen
                 </button>
             </div>
             <div id="server-info">
                 <small>Server: <span id="server-url">--</span></small>
+            </div>
+            <div id="control-hint">
+                <small>Click/tap on video to interact with device</small>
             </div>
         </footer>
     </div>
