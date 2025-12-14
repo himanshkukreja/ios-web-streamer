@@ -347,6 +347,10 @@ class StreamViewer {
         this.lastBytesReceived = 0;
         this.lastTimestamp = 0;
 
+        // Device info tracking
+        this.deviceInfoFetched = false;
+        this.lastDeviceInfoFetch = 0;
+
         // DOM elements
         this.elements = {
             video: document.getElementById('video'),
@@ -360,6 +364,13 @@ class StreamViewer {
             statResolution: document.getElementById('stat-resolution'),
             statBitrate: document.getElementById('stat-bitrate'),
             statPacketsLost: document.getElementById('stat-packets-lost'),
+            // Device info elements
+            deviceInfoPanel: document.getElementById('device-info-panel'),
+            infoDevice: document.getElementById('info-device'),
+            infoModel: document.getElementById('info-model'),
+            infoSystem: document.getElementById('info-system'),
+            infoScreen: document.getElementById('info-screen'),
+            infoBattery: document.getElementById('info-battery'),
             // Control elements
             controlStatus: document.getElementById('control-status'),
             controlStatusText: document.getElementById('control-status-text'),
@@ -643,10 +654,55 @@ class StreamViewer {
                 this.elements.statBitrate.textContent = bitrate > 0 ? `${Math.round(bitrate)} kbps` : '--';
                 this.elements.statPacketsLost.textContent = packetsLost.toString();
 
+                // Fetch device info (once every 5 seconds)
+                if (!this.deviceInfoFetched || (now - this.lastDeviceInfoFetch > 5000)) {
+                    this.fetchDeviceInfo();
+                    this.lastDeviceInfoFetch = now;
+                }
+
             } catch (error) {
                 console.error('Error getting stats:', error);
             }
         }, 1000);
+    }
+
+    async fetchDeviceInfo() {
+        try {
+            const response = await fetch('/device-info');
+            if (response.ok) {
+                const deviceInfo = await response.json();
+                this.updateDeviceInfo(deviceInfo);
+                this.deviceInfoFetched = true;
+            }
+        } catch (error) {
+            console.error('Error fetching device info:', error);
+        }
+    }
+
+    updateDeviceInfo(info) {
+        if (!info || info.error) {
+            this.elements.deviceInfoPanel.style.display = 'none';
+            return;
+        }
+
+        // Show device info panel
+        this.elements.deviceInfoPanel.style.display = 'flex';
+
+        // Update device info values
+        this.elements.infoDevice.textContent = this.truncate(info.deviceName || 'Unknown', 12);
+        this.elements.infoModel.textContent = info.deviceModel || 'Unknown';
+        this.elements.infoSystem.textContent = `${info.systemName || 'iOS'} ${info.systemVersion || ''}`.trim();
+        this.elements.infoScreen.textContent = `${info.screenResolution || '--'}`;
+
+        // Format battery info
+        const batteryLevel = info.batteryLevel !== undefined && info.batteryLevel >= 0 ? `${info.batteryLevel}%` : '--';
+        const batteryIcon = info.batteryState === 'charging' ? '⚡' : '';
+        this.elements.infoBattery.textContent = `${batteryLevel}${batteryIcon}`;
+    }
+
+    truncate(str, maxLen) {
+        if (str.length <= maxLen) return str;
+        return str.substring(0, maxLen - 1) + '…';
     }
 
     updateStatus(status) {

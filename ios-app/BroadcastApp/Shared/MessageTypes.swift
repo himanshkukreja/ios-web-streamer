@@ -53,6 +53,14 @@ enum ProtocolMessage {
         return createMessage(type: .stats, timestamp: 0, payload: jsonData)
     }
 
+    /// Create a device info message
+    static func deviceInfo(json: String) -> Data {
+        guard let jsonData = json.data(using: .utf8) else {
+            return createMessage(type: .deviceInfo, timestamp: 0, payload: Data())
+        }
+        return createMessage(type: .deviceInfo, timestamp: 0, payload: jsonData)
+    }
+
     /// Create an end stream message
     static func endStream() -> Data {
         return createMessage(type: .endStream, timestamp: 0, payload: Data())

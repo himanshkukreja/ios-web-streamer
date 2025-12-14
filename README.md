@@ -2,6 +2,22 @@
 
 Stream and control your iOS device in real-time from any web browser. This project enables low-latency screen mirroring via WebRTC with full touch/gesture control through WebDriverAgent.
 
+## 🎬 Demo
+
+![Demo Preview](docs/demo-preview.gif)
+
+**[▶️ Watch Full Demo Video (1:20)](docs/demo.mov)**
+
+### Features Demonstrated:
+- ✅ Real-time screen streaming from iOS to web browser
+- ✅ Low-latency WebRTC video delivery with hardware H264 encoding
+- ✅ Device control via WebDriverAgent (tap, swipe, volume, home button)
+- ✅ Device information display (model, system version, battery, screen resolution)
+- ✅ Auto-lock prevention during broadcast
+- ✅ Multi-viewer support with synchronized playback
+
+---
+
 ## Features
 
 ### Streaming

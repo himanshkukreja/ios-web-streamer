@@ -201,6 +201,64 @@ h1 {
     pointer-events: none;
 }
 
+/* Device Info Panel - Left Side (matches controls style) */
+#device-info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 10px;
+}
+
+.info-item {
+    width: 80px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+}
+
+.info-item:hover {
+    background: var(--bg-secondary);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.02);
+}
+
+.info-icon {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.info-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-align: center;
+    width: 100%;
+}
+
+.info-label {
+    font-size: 9px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.info-value {
+    font-size: 11px;
+    color: var(--text-primary);
+    font-weight: 500;
+    word-break: break-word;
+}
+
 /* Device Control Buttons */
 #device-controls {
     display: flex;

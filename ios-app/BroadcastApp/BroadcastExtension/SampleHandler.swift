@@ -50,6 +50,9 @@ class SampleHandler: RPBroadcastSampleHandler {
         webSocket?.onConnect = { [weak self] in
             self?.logger.info("WebSocket connected")
             self?.updateServerConnectionState(true)
+
+            // Send device info to server
+            self?.sendDeviceInfo()
         }
 
         webSocket?.onDisconnect = { [weak self] error in
@@ -243,5 +246,17 @@ class SampleHandler: RPBroadcastSampleHandler {
 
         let statsMessage = ProtocolMessage.stats(fps: fps, bitrate: Constants.Video.defaultBitrate)
         webSocket.send(statsMessage)
+    }
+
+    private func sendDeviceInfo() {
+        guard let webSocket = webSocket, webSocket.isConnected else { return }
+
+        let deviceInfo = DeviceInfo.current()
+        let jsonString = deviceInfo.toJSON()
+
+        logger.info("Sending device info: \(jsonString)")
+
+        let deviceInfoMessage = ProtocolMessage.deviceInfo(json: jsonString)
+        webSocket.send(deviceInfoMessage)
     }
 }

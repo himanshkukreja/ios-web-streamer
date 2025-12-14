@@ -29,10 +29,11 @@ class WebRTCServer:
     - Multiple concurrent viewers via MediaRelay
     """
 
-    def __init__(self, frame_queue: FrameQueue, enable_control: bool = True, wda_host: str = None):
+    def __init__(self, frame_queue: FrameQueue, enable_control: bool = True, wda_host: str = None, ios_receiver=None):
         self.frame_queue = frame_queue
         self.peer_connections: Set[RTCPeerConnection] = set()
         self.relay = MediaRelay()
+        self.ios_receiver = ios_receiver  # Reference to iOS receiver for device info
 
         # Shared video track for all viewers
         self.video_track: Optional[iOSVideoTrack] = None
@@ -61,6 +62,7 @@ class WebRTCServer:
         self.app.router.add_get('/health', self.handle_health)
         self.app.router.add_get('/control', self.handle_control_websocket)
         self.app.router.add_get('/control/status', self.handle_control_status)
+        self.app.router.add_get('/device-info', self.handle_device_info)
 
     def _get_rtc_configuration(self) -> RTCConfiguration:
         """Get RTC configuration with ICE servers."""
@@ -179,6 +181,13 @@ class WebRTCServer:
     async def handle_health(self, request: web.Request) -> web.Response:
         """Health check endpoint."""
         return web.json_response({'status': 'healthy'})
+
+    async def handle_device_info(self, request: web.Request) -> web.Response:
+        """Device info endpoint."""
+        if self.ios_receiver and self.ios_receiver.device_info:
+            return web.json_response(self.ios_receiver.device_info)
+        else:
+            return web.json_response({'error': 'No device info available'}, status=404)
 
     async def handle_control_websocket(self, request: web.Request) -> web.WebSocketResponse:
         """Handle WebSocket connection for device control."""

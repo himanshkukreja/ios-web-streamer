@@ -57,7 +57,8 @@ class StreamingServer:
         self.webrtc_server = WebRTCServer(
             self.frame_queue,
             enable_control=enable_control,
-            wda_host=wda_host
+            wda_host=wda_host,
+            ios_receiver=self.ios_receiver
         )
 
         if media_file:
