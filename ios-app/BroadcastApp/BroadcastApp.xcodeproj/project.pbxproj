@@ -17,6 +17,8 @@
 		BBB000004 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA000013 /* Constants.swift */; };
 		BBB000005 /* MessageTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA000014 /* MessageTypes.swift */; };
 		CCC000001 /* BroadcastExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DDD000002 /* BroadcastExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D91D2ED72EEE9C6C003C5A09 /* DeviceInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = D91D2ED62EEE9C6C003C5A09 /* DeviceInfo.swift */; };
+		D91D2ED82EEE9C6C003C5A09 /* DeviceInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = D91D2ED62EEE9C6C003C5A09 /* DeviceInfo.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,6 +57,7 @@
 		BBB000013 /* WebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketClient.swift; sourceTree = "<group>"; };
 		BBB000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BBB000015 /* BroadcastExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BroadcastExtension.entitlements; sourceTree = "<group>"; };
+		D91D2ED62EEE9C6C003C5A09 /* DeviceInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceInfo.swift; sourceTree = "<group>"; };
 		DDD000002 /* BroadcastExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = BroadcastExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DDD000003 /* BroadcastApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BroadcastApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -113,6 +116,7 @@
 		GGG000004 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				D91D2ED62EEE9C6C003C5A09 /* DeviceInfo.swift */,
 				AAA000013 /* Constants.swift */,
 				AAA000014 /* MessageTypes.swift */,
 			);
@@ -230,6 +234,7 @@
 				AAA000002 /* ContentView.swift in Sources */,
 				AAA000003 /* Constants.swift in Sources */,
 				AAA000004 /* MessageTypes.swift in Sources */,
+				D91D2ED72EEE9C6C003C5A09 /* DeviceInfo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -238,6 +243,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BBB000001 /* SampleHandler.swift in Sources */,
+				D91D2ED82EEE9C6C003C5A09 /* DeviceInfo.swift in Sources */,
 				BBB000002 /* H264Encoder.swift in Sources */,
 				BBB000003 /* WebSocketClient.swift in Sources */,
 				BBB000004 /* Constants.swift in Sources */,
