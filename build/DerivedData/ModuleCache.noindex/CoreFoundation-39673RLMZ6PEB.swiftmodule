@@ -1,0 +1,84 @@
+---
+path:            '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator/prebuilt-modules/18.2/CoreFoundation.swiftmodule/arm64-apple-ios-simulator.swiftmodule'
+dependencies:
+  - mtime:           1733472369000000000
+    path:            '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator/prebuilt-modules/18.2/CoreFoundation.swiftmodule/arm64-apple-ios-simulator.swiftmodule'
+    size:            157684
+  - mtime:           1731231370000000000
+    path:            'usr/lib/swift/Swift.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            2050253
+    sdk_relative:    true
+  - mtime:           1731232120000000000
+    path:            'usr/include/_time.apinotes'
+    size:            1132
+    sdk_relative:    true
+  - mtime:           1731227095000000000
+    path:            'usr/include/ObjectiveC.apinotes'
+    size:            11147
+    sdk_relative:    true
+  - mtime:           1731228246000000000
+    path:            'usr/include/Dispatch.apinotes'
+    size:            19
+    sdk_relative:    true
+  - mtime:           1731232345000000000
+    path:            'usr/lib/swift/_errno.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            3712
+    sdk_relative:    true
+  - mtime:           1731232367000000000
+    path:            'usr/lib/swift/_signal.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            997
+    sdk_relative:    true
+  - mtime:           1731232380000000000
+    path:            'usr/lib/swift/sys_time.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            998
+    sdk_relative:    true
+  - mtime:           1731232368000000000
+    path:            'usr/lib/swift/_time.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            961
+    sdk_relative:    true
+  - mtime:           1731232368000000000
+    path:            'usr/lib/swift/_stdio.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            1423
+    sdk_relative:    true
+  - mtime:           1731232386000000000
+    path:            'usr/lib/swift/unistd.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            693
+    sdk_relative:    true
+  - mtime:           1731232345000000000
+    path:            'usr/lib/swift/_math.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            16104
+    sdk_relative:    true
+  - mtime:           1731231433000000000
+    path:            'usr/lib/swift/_Builtin_float.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            4198
+    sdk_relative:    true
+  - mtime:           1731232399000000000
+    path:            'usr/lib/swift/Darwin.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            19775
+    sdk_relative:    true
+  - mtime:           1731232717000000000
+    path:            'usr/lib/swift/_Concurrency.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            248687
+    sdk_relative:    true
+  - mtime:           1731233121000000000
+    path:            'usr/lib/swift/_StringProcessing.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            22664
+    sdk_relative:    true
+  - mtime:           1731234258000000000
+    path:            'System/Library/Frameworks/Combine.framework/Modules/Combine.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            172314
+    sdk_relative:    true
+  - mtime:           1731234228000000000
+    path:            'usr/lib/swift/ObjectiveC.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            6429
+    sdk_relative:    true
+  - mtime:           1731234408000000000
+    path:            'usr/lib/swift/Dispatch.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            56578
+    sdk_relative:    true
+  - mtime:           1731234573000000000
+    path:            'usr/lib/swift/CoreFoundation.swiftmodule/arm64-apple-ios-simulator.swiftinterface'
+    size:            22703
+    sdk_relative:    true
+version:         1
+...

@@ -1,0 +1,152 @@
+{
+  "source": "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/ios-app/BroadcastApp/BroadcastApp/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Screen Streamer",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 49
+        }
+      },
+      {
+        "comment": "",
+        "key": "Start Broadcast",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 18
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tap the circle above",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 25
+        }
+      },
+      {
+        "comment": "",
+        "key": "Active",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 133
+        }
+      },
+      {
+        "comment": "",
+        "key": "Inactive",
+        "location": {
+          "startingColumn": 40,
+          "startingLine": 133
+        }
+      },
+      {
+        "comment": "",
+        "key": "Server Configuration",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 208
+        }
+      },
+      {
+        "comment": "",
+        "key": "ws://%@:%@",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 234
+        }
+      },
+      {
+        "comment": "",
+        "key": "Host",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 214
+        }
+      },
+      {
+        "comment": "",
+        "key": "localhost",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 217
+        }
+      },
+      {
+        "comment": "",
+        "key": "Port",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 224
+        }
+      },
+      {
+        "comment": "",
+        "key": "8765",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 227
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 255
+        }
+      },
+      {
+        "comment": "",
+        "key": "Frames",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 259
+        }
+      },
+      {
+        "comment": "",
+        "key": "FPS",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 269
+        }
+      },
+      {
+        "comment": "",
+        "key": "ReplayKit broadcast extensions don't work in the iOS Simulator. Please use a real iOS device to test screen broadcasting.\n\nTo test the server, run:\n./scripts/start-server.sh --test",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 299
+        }
+      },
+      {
+        "comment": "",
+        "key": "1. Make sure the Python server is running\n2. Tap the broadcast button above\n3. Select \"Screen Streamer\" from the list\n4. Confirm to start broadcasting",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 308
+        }
+      },
+      {
+        "comment": "",
+        "key": "Simulator Limitation",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 295
+        }
+      },
+      {
+        "comment": "",
+        "key": "How to use",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 304
+        }
+      }
+    ]
+  },
+  "version": 1
+}

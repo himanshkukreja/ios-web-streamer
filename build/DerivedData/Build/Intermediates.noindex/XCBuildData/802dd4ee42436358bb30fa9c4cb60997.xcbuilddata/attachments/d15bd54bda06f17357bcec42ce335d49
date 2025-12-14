@@ -1,0 +1,48 @@
+{
+  "" : {
+    "diagnostics" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastApp-master.dia",
+    "emit-module-dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastApp-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastApp-master-emit-module.dia",
+    "swift-dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastApp-master.swiftdeps"
+  },
+  "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/ios-app/BroadcastApp/BroadcastApp/BroadcastAppApp.swift" : {
+    "const-values" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastAppApp.swiftconstvalues",
+    "dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastAppApp.d",
+    "diagnostics" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastAppApp.dia",
+    "index-unit-output-path" : "/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastAppApp.o",
+    "llvm-bc" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastAppApp.bc",
+    "object" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastAppApp.o",
+    "swift-dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastAppApp.swiftdeps",
+    "swiftmodule" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/BroadcastAppApp~partial.swiftmodule"
+  },
+  "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/ios-app/BroadcastApp/BroadcastApp/ContentView.swift" : {
+    "const-values" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/ios-app/BroadcastApp/Shared/Constants.swift" : {
+    "const-values" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/Constants.swiftconstvalues",
+    "dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/Constants.d",
+    "diagnostics" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/Constants.dia",
+    "index-unit-output-path" : "/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/Constants.o",
+    "llvm-bc" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/Constants.bc",
+    "object" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/Constants.o",
+    "swift-dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/Constants.swiftdeps",
+    "swiftmodule" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/Constants~partial.swiftmodule"
+  },
+  "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/ios-app/BroadcastApp/Shared/MessageTypes.swift" : {
+    "const-values" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/MessageTypes.swiftconstvalues",
+    "dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/MessageTypes.d",
+    "diagnostics" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/MessageTypes.dia",
+    "index-unit-output-path" : "/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/MessageTypes.o",
+    "llvm-bc" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/MessageTypes.bc",
+    "object" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/MessageTypes.o",
+    "swift-dependencies" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/MessageTypes.swiftdeps",
+    "swiftmodule" : "/Users/himanshukukreja/autoflow/nativebridge-ios-web-streamer/build/DerivedData/Build/Intermediates.noindex/BroadcastApp.build/Debug-iphonesimulator/BroadcastApp.build/Objects-normal/arm64/MessageTypes~partial.swiftmodule"
+  }
+}

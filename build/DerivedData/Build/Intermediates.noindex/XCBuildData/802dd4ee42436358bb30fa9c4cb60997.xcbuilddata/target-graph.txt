@@ -1,0 +1,4 @@
+Target dependency graph (2 targets)
+Target 'BroadcastApp' in project 'BroadcastApp'
+➜ Explicit dependency on target 'BroadcastExtension' in project 'BroadcastApp'
+Target 'BroadcastExtension' in project 'BroadcastApp' (no dependencies)

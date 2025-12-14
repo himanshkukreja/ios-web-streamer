@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Simulator Stream</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="container">
+        <header>
+            <h1>iOS Simulator Stream</h1>
+            <div id="status" class="status disconnected">
+                <span class="status-dot"></span>
+                <span class="status-text">Disconnected</span>
+            </div>
+        </header>
+
+        <main>
+            <div id="video-container">
+                <video id="video" autoplay playsinline muted></video>
+                <div id="no-stream" class="overlay">
+                    <div class="overlay-content">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                        <p>Waiting for iOS stream...</p>
+                        <small>Start a broadcast from the iOS app</small>
+                    </div>
+                </div>
+            </div>
+
+            <div id="stats-bar">
+                <div class="stat">
+                    <span class="stat-label">FPS</span>
+                    <span class="stat-value" id="stat-fps">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Resolution</span>
+                    <span class="stat-value" id="stat-resolution">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Bitrate</span>
+                    <span class="stat-value" id="stat-bitrate">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Packets Lost</span>
+                    <span class="stat-value" id="stat-packets-lost">--</span>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div id="controls">
+                <button id="connectBtn" class="btn btn-primary">
+                    <span class="btn-icon">▶</span>
+                    Connect
+                </button>
+                <button id="fullscreenBtn" class="btn btn-secondary" disabled>
+                    <span class="btn-icon">⛶</span>
+                    Fullscreen
+                </button>
+            </div>
+            <div id="server-info">
+                <small>Server: <span id="server-url">--</span></small>
+            </div>
+        </footer>
+    </div>
+
+    <script src="viewer.js"></script>
+</body>
+</html>
