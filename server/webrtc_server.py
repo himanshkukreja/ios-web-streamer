@@ -29,7 +29,7 @@ class WebRTCServer:
     - Multiple concurrent viewers via MediaRelay
     """
 
-    def __init__(self, frame_queue: FrameQueue, enable_control: bool = True):
+    def __init__(self, frame_queue: FrameQueue, enable_control: bool = True, wda_host: str = None):
         self.frame_queue = frame_queue
         self.peer_connections: Set[RTCPeerConnection] = set()
         self.relay = MediaRelay()
@@ -42,6 +42,7 @@ class WebRTCServer:
         # Control server for remote control via WDA
         self.control_server: Optional[ControlServer] = None
         self.enable_control = enable_control
+        self.wda_host = wda_host or WDA_HOST  # Use provided host or fall back to config
 
         # HTTP app
         self.app = web.Application()
@@ -218,10 +219,10 @@ class WebRTCServer:
         """Start the HTTP/WebRTC server."""
         # Initialize control server if enabled
         if self.enable_control:
-            self.control_server = ControlServer(WDA_HOST, WDA_PORT)
+            self.control_server = ControlServer(self.wda_host, WDA_PORT)
             set_control_server(self.control_server)
             await self.control_server.start()
-            logger.info(f"Control server initialized (WDA: {WDA_HOST}:{WDA_PORT})")
+            logger.info(f"Control server initialized (WDA: {self.wda_host}:{WDA_PORT})")
 
         runner = web.AppRunner(self.app)
         await runner.setup()

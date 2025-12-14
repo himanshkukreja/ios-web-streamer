@@ -85,9 +85,6 @@ WDA must be running on your iOS device to enable remote control.
 git clone https://github.com/appium/WebDriverAgent.git
 cd WebDriverAgent
 
-# Run bootstrap script
-./Scripts/bootstrap.sh
-
 # Open in Xcode
 open WebDriverAgent.xcodeproj
 ```
@@ -108,14 +105,31 @@ open WebDriverAgent.xcodeproj
 3. Press `Cmd+U` to run tests (this installs and starts WDA)
 4. Trust the developer certificate on iOS if prompted (Settings → General → VPN & Device Management)
 
-**Set up port forwarding:**
+**Set up connection to WDA:**
 
+You have two options:
+
+**Option A: USB Connection (using iproxy)**
 ```bash
 # Forward WDA port from device to Mac
 iproxy 8100 8100
 ```
+Keep this terminal open. Then start the server normally:
+```bash
+./scripts/start-server.sh
+```
 
-Keep this terminal open while using remote control.
+**Option B: WiFi Connection (no USB needed)** 🎉
+```bash
+# Find your device's IP address:
+# Settings → Wi-Fi → (i) icon → IP Address
+# Example: 192.168.1.100
+
+# Start server with device IP
+./scripts/start-server.sh --wda-host 192.168.1.100
+```
+
+For more details on wireless setup, see [docs/WIRELESS_WDA.md](docs/WIRELESS_WDA.md)
 
 #### Step 3: Verify WDA is Running
 

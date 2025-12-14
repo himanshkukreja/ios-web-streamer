@@ -49,6 +49,8 @@ TEST_MODE=""
 MEDIA_FILE=""
 PORT=8999
 DEBUG=""
+NO_CONTROL=""
+WDA_HOST=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -68,21 +70,33 @@ while [[ $# -gt 0 ]]; do
             DEBUG="--debug"
             shift
             ;;
+        --no-control)
+            NO_CONTROL="--no-control"
+            shift
+            ;;
+        --wda-host)
+            WDA_HOST="--wda-host $2"
+            shift 2
+            ;;
         -h|--help)
             echo "Usage: $0 [options]"
             echo ""
             echo "Options:"
-            echo "  --test         Run in test mode (generates test video, no iOS needed)"
-            echo "  --media FILE   Stream a media file (mp4, mkv, etc) to web browsers"
-            echo "  --port N       Set HTTP server port (default: 8999)"
-            echo "  --debug        Enable debug logging"
-            echo "  -h, --help     Show this help message"
+            echo "  --test             Run in test mode (generates test video, no iOS needed)"
+            echo "  --media FILE       Stream a media file (mp4, mkv, etc) to web browsers"
+            echo "  --port N           Set HTTP server port (default: 8999)"
+            echo "  --debug            Enable debug logging"
+            echo "  --no-control       Disable device control via WebDriverAgent"
+            echo "  --wda-host IP      WebDriverAgent host IP (use device IP for WiFi control)"
+            echo "  -h, --help         Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0                           # Normal mode (wait for iOS)"
-            echo "  $0 --test                    # Test with generated pattern"
-            echo "  $0 --media video.mp4         # Stream a video file"
-            echo "  $0 --media ~/Movies/demo.mkv # Stream from absolute path"
+            echo "  $0                               # Normal mode (wait for iOS, USB control)"
+            echo "  $0 --test                        # Test with generated pattern"
+            echo "  $0 --media video.mp4             # Stream a video file"
+            echo "  $0 --no-control                  # Stream only, no device control"
+            echo "  $0 --wda-host 192.168.1.100      # Use WiFi for device control (no USB)"
+            echo "  $0 --media ~/Movies/demo.mkv     # Stream from absolute path"
             exit 0
             ;;
         *)
@@ -113,4 +127,4 @@ fi
 
 # Change to server directory and start
 cd "$SERVER_DIR"
-python3 main.py $TEST_MODE $MEDIA_ARG --port $PORT $DEBUG
+python3 main.py $TEST_MODE $MEDIA_ARG --port $PORT $DEBUG $NO_CONTROL $WDA_HOST

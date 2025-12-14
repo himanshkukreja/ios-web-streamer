@@ -41,18 +41,24 @@ class StreamingServer:
     """
 
     def __init__(self, http_port: int = HTTP_PORT, test_mode: bool = False,
-                 media_file: str = None, enable_control: bool = True):
+                 media_file: str = None, enable_control: bool = True,
+                 wda_host: str = None):
         self.http_port = http_port
         self.test_mode = test_mode
         self.media_file = media_file
         self.enable_control = enable_control
+        self.wda_host = wda_host
 
         # Shared frame queue
         self.frame_queue = FrameQueue(max_size=FRAME_QUEUE_MAX_SIZE)
 
         # Components
         self.ios_receiver = iOSReceiver(self.frame_queue)
-        self.webrtc_server = WebRTCServer(self.frame_queue, enable_control=enable_control)
+        self.webrtc_server = WebRTCServer(
+            self.frame_queue,
+            enable_control=enable_control,
+            wda_host=wda_host
+        )
 
         if media_file:
             self.webrtc_server.set_media_file(media_file)
@@ -126,6 +132,7 @@ async def main():
     parser.add_argument('--port', type=int, default=HTTP_PORT, help=f'HTTP server port (default: {HTTP_PORT})')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--no-control', action='store_true', help='Disable device control via WebDriverAgent')
+    parser.add_argument('--wda-host', type=str, metavar='IP', help='WebDriverAgent host IP (default: localhost for USB, or device IP for WiFi)')
     args = parser.parse_args()
 
     if args.debug:
@@ -146,7 +153,8 @@ async def main():
         http_port=args.port,
         test_mode=args.test,
         media_file=args.media,
-        enable_control=enable_control
+        enable_control=enable_control,
+        wda_host=args.wda_host
     )
 
     # Handle shutdown signals
