@@ -512,11 +512,11 @@ class SimulatorVideoTrack(VideoStreamTrack):
             import io
 
             logger.info("Starting optimized simctl screenshot stream...")
-            logger.info("   Pipeline: simctl screenshot (4x parallel) → decode → frame queue")
-            logger.info("   🚀 Using aggressive parallelism for best throughput")
+            logger.info("   Pipeline: simctl screenshot (2x parallel) → decode → frame queue")
+            logger.info("   ⚡ Optimized for stability and consistent latency")
 
-            # 4 workers for parallel captures
-            executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+            # 2 workers - more stable than 4 (prevents system overload)
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
             capture_times = deque(maxlen=60)
             frame_intervals = deque(maxlen=60)
@@ -524,8 +524,14 @@ class SimulatorVideoTrack(VideoStreamTrack):
             last_log_time = last_frame_time
             start_time = last_frame_time
 
+            # Scale factor to reduce frame size for network streaming
+            # 1.0 = full resolution (1206x2622), best quality but high bandwidth
+            # 0.5 = half resolution (602x1310), lower bandwidth for network/tunnel
+            SCALE_FACTOR = 0.5
+            cached_target_size = [None]
+
             def simctl_capture():
-                """Capture using simctl (runs in thread pool)."""
+                """Capture using simctl with optional scaling (runs in thread pool)."""
                 start = time.time()
                 result = subprocess.run(
                     ['xcrun', 'simctl', 'io', self.simulator_udid, 'screenshot', '--type=tiff', '-'],
@@ -537,12 +543,25 @@ class SimulatorVideoTrack(VideoStreamTrack):
                     return None, 0
 
                 img = Image.open(io.BytesIO(result.stdout))
+
+                # Scale down if needed
+                if SCALE_FACTOR < 1.0:
+                    if cached_target_size[0] is None:
+                        # H.264 requires even dimensions
+                        new_w = (int(img.width * SCALE_FACTOR) // 2) * 2
+                        new_h = (int(img.height * SCALE_FACTOR) // 2) * 2
+                        cached_target_size[0] = (new_w, new_h)
+                        logger.info(f"   📐 Scaling: {img.width}x{img.height} → {new_w}x{new_h} (factor={SCALE_FACTOR})")
+                    img = img.resize(cached_target_size[0], Image.Resampling.BILINEAR)
+
                 rgb = np.array(img.convert('RGB'))
                 elapsed = time.time() - start
                 return rgb, elapsed
 
-            # 4x parallel captures for maximum throughput
-            NUM_PARALLEL = 4
+            # Start with 2 parallel captures (more stable than 4)
+            # System can get overwhelmed with 4 parallel simctl processes
+            NUM_PARALLEL = 2
+
             loop = asyncio.get_event_loop()
             pending = set()
 
@@ -570,6 +589,13 @@ class SimulatorVideoTrack(VideoStreamTrack):
 
                             if rgb_array is not None:
                                 capture_times.append(capture_time)
+
+                                # Warn if capture is unusually slow
+                                if capture_time > 1.0:
+                                    logger.warning(
+                                        f"⚠️ Slow capture detected: {capture_time*1000:.0f}ms "
+                                        f"(system may be under load)"
+                                    )
                                 frame = VideoFrame.from_ndarray(rgb_array, format='rgb24')
                                 self._frames_decoded += 1
 
