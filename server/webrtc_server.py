@@ -185,7 +185,10 @@ class WebRTCServer:
     async def handle_device_info(self, request: web.Request) -> web.Response:
         """Device info endpoint."""
         if self.ios_receiver and self.ios_receiver.device_info:
-            return web.json_response(self.ios_receiver.device_info)
+            # Add deviceType to the response
+            device_info = dict(self.ios_receiver.device_info)
+            device_info['deviceType'] = 'device'  # Real device (not simulator)
+            return web.json_response(device_info)
         else:
             return web.json_response({'error': 'No device info available'}, status=404)
 

@@ -350,6 +350,7 @@ class StreamViewer {
         // Device info tracking
         this.deviceInfoFetched = false;
         this.lastDeviceInfoFetch = 0;
+        this.deviceType = 'device'; // 'device' or 'simulator'
 
         // DOM elements
         this.elements = {
@@ -438,12 +439,23 @@ class StreamViewer {
 
         this.elements.controlStatus.classList.remove('connected', 'disconnected', 'partial');
 
+        // Determine device type from status or stored value
+        const deviceType = status.deviceInfo?.deviceType || this.deviceType || 'device';
+
         if (status.wdaConnected) {
             this.elements.controlStatus.classList.add('connected');
-            this.elements.controlStatusText.textContent = 'Controls Active';
+            if (deviceType === 'simulator') {
+                this.elements.controlStatusText.textContent = 'Simulator Controls Active';
+            } else {
+                this.elements.controlStatusText.textContent = 'Controls Active';
+            }
         } else if (status.connected) {
             this.elements.controlStatus.classList.add('partial');
-            this.elements.controlStatusText.textContent = 'WDA Not Connected';
+            if (deviceType === 'simulator') {
+                this.elements.controlStatusText.textContent = 'Connecting to Simulator...';
+            } else {
+                this.elements.controlStatusText.textContent = 'WDA Not Connected';
+            }
         } else {
             this.elements.controlStatus.classList.add('disconnected');
             this.elements.controlStatusText.textContent = 'Controls Disabled';
@@ -688,16 +700,32 @@ class StreamViewer {
         // Show device info panel
         this.elements.deviceInfoPanel.style.display = 'flex';
 
+        // Track device type for UI adjustments
+        this.deviceType = info.deviceType || 'device';
+
+        // Update page title based on device type
+        if (this.deviceType === 'simulator') {
+            document.title = 'iOS Simulator Stream';
+            document.querySelector('h1').textContent = 'iOS Simulator Stream';
+        } else {
+            document.title = 'iOS Device Stream';
+            document.querySelector('h1').textContent = 'iOS Device Stream';
+        }
+
         // Update device info values
         this.elements.infoDevice.textContent = this.truncate(info.deviceName || 'Unknown', 12);
         this.elements.infoModel.textContent = info.deviceModel || 'Unknown';
         this.elements.infoSystem.textContent = `${info.systemName || 'iOS'} ${info.systemVersion || ''}`.trim();
         this.elements.infoScreen.textContent = `${info.screenResolution || '--'}`;
 
-        // Format battery info
-        const batteryLevel = info.batteryLevel !== undefined && info.batteryLevel >= 0 ? `${info.batteryLevel}%` : '--';
-        const batteryIcon = info.batteryState === 'charging' ? '⚡' : '';
-        this.elements.infoBattery.textContent = `${batteryLevel}${batteryIcon}`;
+        // Format battery info (N/A for simulator)
+        if (this.deviceType === 'simulator' || info.batteryLevel === -1) {
+            this.elements.infoBattery.textContent = 'N/A';
+        } else {
+            const batteryLevel = info.batteryLevel !== undefined && info.batteryLevel >= 0 ? `${info.batteryLevel}%` : '--';
+            const batteryIcon = info.batteryState === 'charging' ? '⚡' : '';
+            this.elements.infoBattery.textContent = `${batteryLevel}${batteryIcon}`;
+        }
     }
 
     truncate(str, maxLen) {

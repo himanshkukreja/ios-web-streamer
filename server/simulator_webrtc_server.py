@@ -5,6 +5,7 @@ Streams iOS Simulator screen to web browsers via WebRTC using idb
 """
 
 import asyncio
+import json
 import logging
 import signal
 import sys
@@ -20,11 +21,17 @@ from simulator_receiver import SimulatorVideoTrack, check_ffmpeg_available, find
 # Import H.264 encoder patch for WebRTC keyframe injection
 from h264_encoder_patch import patch_aiortc_h264_encoder
 
+# Import simulator control server
+from simulator_control_server import SimulatorControlServer
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Suppress aiohttp access logs
+logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
 
 
 class SimulatorWebRTCServer:
@@ -32,9 +39,10 @@ class SimulatorWebRTCServer:
     Standalone WebRTC server for iOS Simulator streaming.
     """
 
-    def __init__(self, simulator_udid: str, http_port: int = 8999):
+    def __init__(self, simulator_udid: str, http_port: int = 8999, enable_control: bool = True):
         self.simulator_udid = simulator_udid
         self.http_port = http_port
+        self.enable_control = enable_control
 
         # Video track
         self.video_track: SimulatorVideoTrack = None
@@ -43,6 +51,9 @@ class SimulatorWebRTCServer:
         self.peer_connections = set()
         self.relay = MediaRelay()
 
+        # Control server for simulator control via simctl
+        self.control_server = None
+
         # HTTP app
         self.app = web.Application()
         self._setup_routes()
@@ -50,120 +61,40 @@ class SimulatorWebRTCServer:
     def _setup_routes(self):
         """Set up HTTP routes."""
         self.app.router.add_get('/', self.handle_index)
+        self.app.router.add_get('/viewer.js', self.handle_viewer_js)
+        self.app.router.add_get('/style.css', self.handle_style_css)
         self.app.router.add_post('/offer', self.handle_offer)
         self.app.router.add_get('/health', self.handle_health)
+        self.app.router.add_get('/device-info', self.handle_device_info)
+        self.app.router.add_get('/control', self.handle_control_websocket)
+        self.app.router.add_get('/control/status', self.handle_control_status)
 
     async def handle_index(self, request):
         """Serve the viewer page."""
-        html = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>iOS Simulator Stream</title>
-    <style>
-        body {
-            background: #1a1a1a;
-            color: #fff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 { margin-bottom: 30px; }
-        #video {
-            background: #000;
-            border-radius: 8px;
-            max-width: 90vw;
-            max-height: 80vh;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-        }
-        #status {
-            margin-top: 20px;
-            padding: 10px 20px;
-            border-radius: 4px;
-            background: #333;
-        }
-        .connecting { color: #ffa500; }
-        .connected { color: #00ff00; }
-        .error { color: #ff0000; }
-    </style>
-</head>
-<body>
-    <h1>📱 iOS Simulator Stream</h1>
-    <video id="video" autoplay playsinline muted></video>
-    <div id="status" class="connecting">Connecting...</div>
+        try:
+            with open('../web/index.html', 'r') as f:
+                content = f.read()
+            return web.Response(content_type='text/html', text=content)
+        except FileNotFoundError:
+            return web.Response(status=404, text='index.html not found')
 
-    <script>
-        const video = document.getElementById('video');
-        const status = document.getElementById('status');
+    async def handle_viewer_js(self, request):
+        """Serve the viewer JavaScript."""
+        try:
+            with open('../web/viewer.js', 'r') as f:
+                content = f.read()
+            return web.Response(content_type='application/javascript', text=content)
+        except FileNotFoundError:
+            return web.Response(status=404, text='viewer.js not found')
 
-        async function start() {
-            try {
-                const pc = new RTCPeerConnection({
-                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-                });
-
-                pc.ontrack = (event) => {
-                    console.log('Received track:', event.track);
-                    video.srcObject = event.streams[0];
-                    status.textContent = '✅ Connected';
-                    status.className = 'connected';
-                };
-
-                pc.oniceconnectionstatechange = () => {
-                    console.log('ICE state:', pc.iceConnectionState);
-                    if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-                        status.textContent = '❌ Disconnected';
-                        status.className = 'error';
-                    }
-                };
-
-                // Add transceiver to receive video (required for recvonly offer)
-                pc.addTransceiver('video', { direction: 'recvonly' });
-
-                // Create offer
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-
-                console.log('Sending offer, SDP length:', offer.sdp.length);
-
-                // Send offer to server
-                const response = await fetch('/offer', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sdp: pc.localDescription.sdp,
-                        type: pc.localDescription.type
-                    })
-                });
-
-                const answer = await response.json();
-                if (answer.error) {
-                    throw new Error(answer.error);
-                }
-
-                console.log('Received answer, SDP length:', answer.sdp.length);
-                await pc.setRemoteDescription(answer);
-
-                status.textContent = 'Waiting for video...';
-
-            } catch (e) {
-                console.error('Error:', e);
-                status.textContent = '❌ Error: ' + e.message;
-                status.className = 'error';
-            }
-        }
-
-        start();
-    </script>
-</body>
-</html>
-        """
-        return web.Response(content_type='text/html', text=html)
+    async def handle_style_css(self, request):
+        """Serve the CSS styles."""
+        try:
+            with open('../web/style.css', 'r') as f:
+                content = f.read()
+            return web.Response(content_type='text/css', text=content)
+        except FileNotFoundError:
+            return web.Response(status=404, text='style.css not found')
 
     async def handle_offer(self, request):
         """Handle WebRTC offer from browser."""
@@ -261,6 +192,108 @@ class SimulatorWebRTCServer:
         """Health check endpoint."""
         return web.json_response({'status': 'ok', 'simulator': self.simulator_udid})
 
+    async def _get_simulator_resolution(self) -> tuple:
+        """Get the actual simulator screen resolution using simctl screenshot."""
+        try:
+            from PIL import Image
+            import io
+
+            proc = await asyncio.create_subprocess_exec(
+                'xcrun', 'simctl', 'io', self.simulator_udid, 'screenshot', '--type=tiff', '-',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+
+            if proc.returncode == 0 and stdout:
+                img = Image.open(io.BytesIO(stdout))
+                logger.info(f"Detected simulator resolution: {img.width}x{img.height}")
+                return img.width, img.height
+        except Exception as e:
+            logger.warning(f"Could not detect simulator resolution: {e}")
+
+        # Default fallback
+        return 1170, 2532  # iPhone 14 Pro resolution
+
+    async def handle_device_info(self, request):
+        """Device info endpoint for simulator."""
+        try:
+            # Get simulator info using simctl
+            result = subprocess.run(
+                ['xcrun', 'simctl', 'list', 'devices', '-j'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                import json
+                devices_data = json.loads(result.stdout)
+                # Find the simulator by UDID
+                for runtime, devices in devices_data.get('devices', {}).items():
+                    for device in devices:
+                        if device.get('udid') == self.simulator_udid:
+                            # Extract iOS version from runtime string
+                            ios_version = "Unknown"
+                            if 'iOS' in runtime:
+                                # Format: com.apple.CoreSimulator.SimRuntime.iOS-17-2
+                                parts = runtime.split('iOS-')
+                                if len(parts) > 1:
+                                    ios_version = parts[1].replace('-', '.')
+
+                            return web.json_response({
+                                'deviceType': 'simulator',
+                                'deviceName': device.get('name', 'iOS Simulator'),
+                                'deviceModel': device.get('deviceTypeIdentifier', '').split('.')[-1].replace('-', ' '),
+                                'systemName': 'iOS Simulator',
+                                'systemVersion': ios_version,
+                                'udid': self.simulator_udid,
+                                'state': device.get('state', 'Unknown'),
+                                'screenResolution': f"{self.video_track.frame_width}x{self.video_track.frame_height}" if self.video_track and hasattr(self.video_track, 'frame_width') else '--',
+                                'batteryLevel': -1,  # N/A for simulator
+                                'batteryState': 'unknown'
+                            })
+
+            return web.json_response({
+                'deviceType': 'simulator',
+                'deviceName': 'iOS Simulator',
+                'udid': self.simulator_udid,
+                'error': 'Could not fetch device details'
+            })
+        except Exception as e:
+            logger.error(f"Error fetching device info: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def handle_control_websocket(self, request):
+        """Handle WebSocket connection for simulator control."""
+        if self.control_server:
+            return await self.control_server.handle_websocket(request)
+        else:
+            ws = web.WebSocketResponse()
+            await ws.prepare(request)
+            await ws.send_json({
+                "type": "error",
+                "error": "Control server not available"
+            })
+            await ws.close()
+            return ws
+
+    async def handle_control_status(self, request):
+        """Return control server status."""
+        if self.control_server:
+            return web.json_response({
+                "enabled": True,
+                "wdaConnected": True,  # For simulator, simctl is always available
+                "deviceType": "simulator",
+                "screenWidth": self.video_track.frame_width if self.video_track and hasattr(self.video_track, 'frame_width') else 0,
+                "screenHeight": self.video_track.frame_height if self.video_track and hasattr(self.video_track, 'frame_height') else 0,
+            })
+        else:
+            return web.json_response({
+                "enabled": False,
+                "wdaConnected": False,
+                "deviceType": "simulator"
+            })
+
     async def start(self):
         """Start the server."""
         logger.info("=" * 70)
@@ -318,6 +351,16 @@ class SimulatorWebRTCServer:
         else:
             logger.info("   Pipeline: idb H.264 → decode → frame queue → aiortc H.264")
 
+        # Initialize control server if enabled
+        if self.enable_control:
+            self.control_server = SimulatorControlServer(self.simulator_udid)
+            # Set the actual screen size (before scaling) for proper coordinate mapping
+            # idb uses the native simulator resolution, not the scaled video size
+            actual_width, actual_height = await self._get_simulator_resolution()
+            self.control_server.set_screen_size(actual_width, actual_height)
+            await self.control_server.start()
+            logger.info(f"🎮 Control server initialized (using idb, screen: {actual_width}x{actual_height})")
+
         # Start HTTP server
         runner = web.AppRunner(self.app)
         await runner.setup()
@@ -342,6 +385,10 @@ class SimulatorWebRTCServer:
     async def shutdown(self):
         """Shutdown the server."""
         logger.info("Shutting down...")
+
+        # Stop control server if running
+        if self.control_server:
+            await self.control_server.stop()
 
         # Close all peer connections
         for pc in list(self.peer_connections):

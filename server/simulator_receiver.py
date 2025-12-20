@@ -612,10 +612,10 @@ class SimulatorVideoTrack(VideoStreamTrack):
                                     avg_capture = sum(capture_times) / len(capture_times) * 1000 if capture_times else 0
                                     avg_interval = sum(frame_intervals) / len(frame_intervals) if frame_intervals else 1
                                     effective_fps = 1.0 / avg_interval if avg_interval > 0 else 0
-                                    logger.info(
-                                        f"📹 Frame {self._frames_decoded}: {frame.width}x{frame.height} "
-                                        f"(simctl latency: {avg_capture:.0f}ms, {effective_fps:.1f} FPS)"
-                                    )
+                                    # logger.info(
+                                    #     f"📹 Frame {self._frames_decoded}: {frame.width}x{frame.height} "
+                                    #     f"(simctl latency: {avg_capture:.0f}ms, {effective_fps:.1f} FPS)"
+                                    # )
                                     last_log_time = now
 
                                 try:
