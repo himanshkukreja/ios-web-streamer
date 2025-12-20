@@ -282,24 +282,29 @@ class SimulatorWebRTCServer:
             logger.warning("⚠️ FFmpeg NOT found - will use raw idb stream (may have corruption)")
 
         # ============================================================
-        # CAPTURE METHOD CONFIGURATION
+        # CAPTURE CONFIGURATION
         # ============================================================
-        # Available options:
-        #   "quartz"   - Fast Quartz window capture (~50-80ms latency, ~45 FPS)
-        #   "simctl"   - simctl screenshot (~250-350ms latency, ~12 FPS)
-        #   "idb_h264" - idb H.264 stream (30 FPS, may have corruption on transitions)
+        # Capture method:
+        #   "simctl"   - Recommended. Works headless, uses UDID (~300ms latency)
+        #   "quartz"   - Fast (~80ms) but needs visible window
+        #   "idb_h264" - 30 FPS but may have corruption
         #
-        # Recommended: "quartz" for best performance
+        # Scale factor for network streaming:
+        #   1.0 = Full resolution (1206x2622) - best for localhost
+        #   0.5 = Half resolution (602x1310) - better for network/tunnel
+        #   0.75 = 3/4 resolution (904x1966) - balanced
         # ============================================================
         CAPTURE_METHOD = "simctl"
+        SCALE_FACTOR = 0.5  # Use 0.5 for network, 1.0 for localhost
 
-        logger.info(f"🚀 Starting video stream (capture method: {CAPTURE_METHOD})...")
+        logger.info(f"🚀 Starting video stream (method: {CAPTURE_METHOD}, scale: {SCALE_FACTOR})...")
 
         self.video_track = SimulatorVideoTrack(
             simulator_udid=self.simulator_udid,
             fps=30,
             port=10882,
-            capture_method=CAPTURE_METHOD
+            capture_method=CAPTURE_METHOD,
+            scale_factor=SCALE_FACTOR
         )
 
         await self.video_track.start()
@@ -308,7 +313,8 @@ class SimulatorWebRTCServer:
         if CAPTURE_METHOD == "quartz":
             logger.info("   Pipeline: Quartz window capture → frame queue → aiortc H.264")
         elif CAPTURE_METHOD == "simctl":
-            logger.info("   Pipeline: simctl screenshot → decode → frame queue → aiortc H.264")
+            scale_info = f" (scaled to {SCALE_FACTOR}x)" if SCALE_FACTOR < 1.0 else ""
+            logger.info(f"   Pipeline: simctl screenshot{scale_info} → frame queue → aiortc H.264")
         else:
             logger.info("   Pipeline: idb H.264 → decode → frame queue → aiortc H.264")
 
