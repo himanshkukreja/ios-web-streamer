@@ -48,6 +48,8 @@ class SimulatorVideoTrack(VideoStreamTrack):
         self._codec: Optional[CodecContext] = None
         self._timestamp = 0
         self._running = False
+        self._received_first_keyframe = False
+        self._pending_packets = []  # Buffer for packets until keyframe
 
         # Frame queue (small size for low latency)
         self._frame_queue = asyncio.Queue(maxsize=2)
@@ -66,15 +68,8 @@ class SimulatorVideoTrack(VideoStreamTrack):
         # Connect client
         await self._connect_client()
 
-        # Initialize H.264 decoder with optimized settings
+        # Initialize H.264 decoder (simple, like working idb_streamer_final.py)
         self._codec = CodecContext.create('h264', 'r')
-        # Configure decoder for low latency and quality
-        self._codec.thread_count = 1
-        self._codec.thread_type = 0
-        self._codec.options = {
-            'flags': '+low_delay',
-            'flags2': '+fast',
-        }
 
         self._running = True
 
@@ -129,24 +124,24 @@ class SimulatorVideoTrack(VideoStreamTrack):
         logger.info("✅ Connected to idb_companion")
 
     async def _stream_and_decode(self):
-        """Stream H.264 from idb and decode to frames."""
+        """Stream H.264 from idb and decode to frames (SIMPLE VERSION - like idb_streamer_final.py)."""
         frame_count = 0
 
         try:
             logger.info("Starting H.264 stream from idb...")
 
-            # Stream video using idb client with highest quality settings
+            # Stream video using idb client (EXACTLY like working idb_streamer_final.py)
             async for h264_data in self._client.stream_video(
                 output_file=None,  # Stream to memory
                 fps=self.fps,
                 format=VideoFormat.H264,
-                compression_quality=1.0,  # Maximum quality (was 0.8)
+                compression_quality=0.8,
                 scale_factor=1.0
             ):
                 if not self._running:
                     break
 
-                # Decode H.264 data
+                # Decode H.264 data (SIMPLE - no keyframe logic!)
                 try:
                     packets = self._codec.parse(h264_data)
 
@@ -163,8 +158,12 @@ class SimulatorVideoTrack(VideoStreamTrack):
                             try:
                                 self._frame_queue.put_nowait(frame)
                             except asyncio.QueueFull:
-                                # Drop frame if queue is full (backpressure)
-                                pass
+                                # Drop oldest frame and add new one
+                                try:
+                                    self._frame_queue.get_nowait()
+                                    self._frame_queue.put_nowait(frame)
+                                except:
+                                    pass
 
                 except Exception as e:
                     logger.error(f"Error decoding H.264: {e}")
