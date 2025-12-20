@@ -93,6 +93,11 @@ class SimulatorVideoTrack(VideoStreamTrack):
 
     kind = "video"
 
+    # Capture method options
+    CAPTURE_QUARTZ = "quartz"      # Fast Quartz window capture (~50-80ms, ~45 FPS)
+    CAPTURE_SIMCTL = "simctl"      # simctl screenshot (~250-350ms, ~12 FPS)
+    CAPTURE_IDB_H264 = "idb_h264"  # idb H.264 stream (30 FPS, may have corruption)
+
     def __init__(
         self,
         simulator_udid: str,
@@ -100,7 +105,8 @@ class SimulatorVideoTrack(VideoStreamTrack):
         port: int = 10882,
         keyframe_interval: float = 1.0,
         use_ffmpeg_transcoding: bool = False,
-        use_mjpeg: bool = True  # NEW: Use MJPEG to avoid keyframe issues
+        use_mjpeg: bool = True,  # NEW: Use MJPEG to avoid keyframe issues
+        capture_method: str = "quartz"  # "quartz", "simctl", or "idb_h264"
     ):
         """
         Initialize SimulatorVideoTrack.
@@ -113,6 +119,10 @@ class SimulatorVideoTrack(VideoStreamTrack):
             use_ffmpeg_transcoding: Whether to use FFmpeg to inject keyframes (default: False)
             use_mjpeg: Use MJPEG format instead of H.264 (default: True)
                       MJPEG has no keyframe issues - every frame is independent
+            capture_method: Capture method to use:
+                - "quartz": Fast Quartz window capture (~50-80ms latency, ~45 FPS)
+                - "simctl": simctl screenshot (~250-350ms latency, ~12 FPS)
+                - "idb_h264": idb H.264 stream (30 FPS, may have corruption)
         """
         super().__init__()
         self.simulator_udid = simulator_udid
@@ -121,6 +131,7 @@ class SimulatorVideoTrack(VideoStreamTrack):
         self.keyframe_interval = keyframe_interval
         self.use_ffmpeg_transcoding = use_ffmpeg_transcoding
         self.use_mjpeg = use_mjpeg
+        self.capture_method = capture_method.lower()
 
         # IDB components
         self._companion_process: Optional[subprocess.Popen] = None
@@ -151,14 +162,28 @@ class SimulatorVideoTrack(VideoStreamTrack):
     async def start(self):
         """Start streaming from simulator."""
         logger.info(f"🚀 Starting stream for simulator {self.simulator_udid}")
+        logger.info(f"   Capture method: {self.capture_method}")
 
         self._running = True
 
-        # Screenshot mode - uses simctl directly, no idb needed
-        if self.use_mjpeg:
-            logger.info("📸 Using simctl screenshot mode (zero corruption, every frame independent)")
-            self._decoder_task = asyncio.create_task(self._stream_mjpeg())
-            logger.info("✅ Screenshot stream started")
+        # Handle capture method
+        if self.capture_method == self.CAPTURE_QUARTZ:
+            logger.info("📸 Using Quartz window capture (fast, ~50-80ms latency, ~45 FPS)")
+            self._decoder_task = asyncio.create_task(self._stream_quartz())
+            logger.info("✅ Quartz capture started")
+            return
+
+        if self.capture_method == self.CAPTURE_SIMCTL:
+            logger.info("📸 Using simctl screenshot (slower, ~250-350ms latency, ~12 FPS)")
+            self._decoder_task = asyncio.create_task(self._stream_simctl())
+            logger.info("✅ simctl capture started")
+            return
+
+        # Legacy: use_mjpeg flag (backwards compatibility)
+        if self.use_mjpeg and self.capture_method not in [self.CAPTURE_QUARTZ, self.CAPTURE_SIMCTL, self.CAPTURE_IDB_H264]:
+            logger.info("📸 Using Quartz window capture (default for use_mjpeg=True)")
+            self._decoder_task = asyncio.create_task(self._stream_quartz())
+            logger.info("✅ Quartz capture started")
             return
 
         # H.264 mode - uses idb
@@ -283,137 +308,318 @@ class SimulatorVideoTrack(VideoStreamTrack):
 
         logger.info("✅ Connected to idb_companion")
 
-    async def _stream_mjpeg(self):
+    def _find_simulator_window(self):
+        """Find the Simulator window ID for direct Quartz capture."""
+        try:
+            import Quartz
+
+            # Get all windows
+            options = Quartz.kCGWindowListOptionAll
+            window_list = Quartz.CGWindowListCopyWindowInfo(options, Quartz.kCGNullWindowID)
+
+            # Find the main simulator window (has a device name like "iPhone 16 Pro")
+            for window in window_list:
+                owner = window.get('kCGWindowOwnerName', '')
+                name = window.get('kCGWindowName', '')
+                if owner == 'Simulator' and name and ('iPhone' in name or 'iPad' in name):
+                    window_id = window.get('kCGWindowNumber')
+                    bounds = window.get('kCGWindowBounds', {})
+                    logger.info(f"Found Simulator window {window_id}: {name}")
+                    logger.info(f"   Bounds: {bounds.get('Width')}x{bounds.get('Height')}")
+                    return window_id
+
+            # Fallback: find largest Simulator window
+            largest = None
+            largest_area = 0
+            for window in window_list:
+                owner = window.get('kCGWindowOwnerName', '')
+                if owner == 'Simulator':
+                    bounds = window.get('kCGWindowBounds', {})
+                    area = bounds.get('Width', 0) * bounds.get('Height', 0)
+                    if area > largest_area:
+                        largest_area = area
+                        largest = window.get('kCGWindowNumber')
+
+            if largest:
+                logger.info(f"Using largest Simulator window {largest}")
+                return largest
+
+        except Exception as e:
+            logger.warning(f"Could not find Simulator window: {e}")
+
+        return None
+
+    async def _stream_quartz(self):
         """
-        Optimized screenshot streaming with triple-buffered parallel capture.
+        Fast Quartz window capture (~50-80ms latency, ~45 FPS).
 
-        Latency optimizations:
-        1. Use TIFF format (fastest capture with good quality ~190ms)
-        2. Triple-buffering: 3 captures in flight at once
-        3. Thread pool for parallel image decoding
-        4. Frame queue with newest-wins policy
-
-        Target: 8-12 FPS with parallel capture
+        Uses CGWindowListCreateImage to capture the Simulator window directly.
+        This is significantly faster than simctl screenshot.
         """
         try:
-            logger.info("Starting optimized screenshot stream...")
-            logger.info("   Pipeline: simctl screenshot (triple-buffered) → decode → frame queue")
-            logger.info("   🚀 Using TIFF format + parallel capture for best performance")
-
-            from PIL import Image
-            import io
-            import concurrent.futures
+            import Quartz
             from collections import deque
+            import concurrent.futures
+            import time
 
-            # Use thread pool for CPU-bound image decoding
-            executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+            # Find simulator window
+            simulator_window_id = self._find_simulator_window()
+            if simulator_window_id is None:
+                logger.warning("Could not find Simulator window, falling back to simctl")
+                await self._stream_simctl()
+                return
+
+            logger.info("Starting Quartz window capture stream...")
+            logger.info(f"   Pipeline: Quartz capture → convert → frame queue")
+            logger.info(f"   Window ID: {simulator_window_id}")
+
+            # Thread pool for CPU-bound conversions
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
             # Stats tracking
-            capture_times = deque(maxlen=30)
-            process_times = deque(maxlen=30)
-            last_log_time = asyncio.get_event_loop().time()
+            capture_times = deque(maxlen=60)
+            frame_intervals = deque(maxlen=60)
+            last_frame_time = asyncio.get_event_loop().time()
+            last_log_time = last_frame_time
+            start_time = last_frame_time
 
-            def decode_image(data):
-                """Decode image in thread pool."""
-                img = Image.open(io.BytesIO(data))
-                img_rgb = img.convert('RGB')
-                return np.array(img_rgb)
+            def quartz_capture():
+                """Capture using Quartz (runs in thread pool)."""
+                start = time.time()
 
-            async def capture_screenshot():
-                """Capture a single screenshot using TIFF format."""
-                start = asyncio.get_event_loop().time()
-                proc = await asyncio.create_subprocess_exec(
-                    'xcrun', 'simctl', 'io', self.simulator_udid,
-                    'screenshot', '--type=tiff', '-',
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL
+                image = Quartz.CGWindowListCreateImage(
+                    Quartz.CGRectNull,
+                    Quartz.kCGWindowListOptionIncludingWindow,
+                    simulator_window_id,
+                    Quartz.kCGWindowImageBoundsIgnoreFraming
                 )
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.0)
-                elapsed = asyncio.get_event_loop().time() - start
-                return stdout, elapsed
 
-            # Triple-buffering: maintain 3 captures in flight
-            NUM_BUFFERS = 3
-            pending_captures = [asyncio.create_task(capture_screenshot()) for _ in range(NUM_BUFFERS)]
-            next_capture_idx = 0
+                if image is None:
+                    return None, 0
+
+                # Convert CGImage to numpy array
+                width = Quartz.CGImageGetWidth(image)
+                height = Quartz.CGImageGetHeight(image)
+                bytes_per_row = Quartz.CGImageGetBytesPerRow(image)
+
+                # Get raw pixel data
+                data_provider = Quartz.CGImageGetDataProvider(image)
+                data = Quartz.CGDataProviderCopyData(data_provider)
+
+                # Create numpy array from raw data
+                arr = np.frombuffer(data, dtype=np.uint8)
+                arr = arr.reshape((height, bytes_per_row // 4, 4))
+                arr = arr[:, :width, :]  # Trim padding
+
+                # Convert BGRA to RGB
+                rgb = arr[:, :, [2, 1, 0]]
+
+                elapsed = time.time() - start
+                return rgb, elapsed
+
+            NUM_PARALLEL = 4
+            loop = asyncio.get_event_loop()
+            pending = set()
+
+            # Start initial captures
+            for _ in range(NUM_PARALLEL):
+                pending.add(loop.run_in_executor(executor, quartz_capture))
 
             while self._running:
-                frame_start = asyncio.get_event_loop().time()
-
                 try:
-                    # Wait for the next capture in round-robin order
-                    capture_task = pending_captures[next_capture_idx]
-                    screenshot_data, capture_time = await capture_task
-                    capture_times.append(capture_time)
+                    done, pending = await asyncio.wait(
+                        pending,
+                        return_when=asyncio.FIRST_COMPLETED,
+                        timeout=2.0
+                    )
 
-                    # Start replacement capture immediately
-                    pending_captures[next_capture_idx] = asyncio.create_task(capture_screenshot())
-                    next_capture_idx = (next_capture_idx + 1) % NUM_BUFFERS
+                    if not done:
+                        pending = set()
+                        for _ in range(NUM_PARALLEL):
+                            pending.add(loop.run_in_executor(executor, quartz_capture))
+                        continue
 
-                    if screenshot_data and len(screenshot_data) > 0:
-                        # Decode in thread pool
-                        loop = asyncio.get_event_loop()
-                        decode_start = asyncio.get_event_loop().time()
-                        arr = await loop.run_in_executor(executor, decode_image, screenshot_data)
-                        process_times.append(asyncio.get_event_loop().time() - decode_start)
-
-                        # Create VideoFrame
-                        frame = VideoFrame.from_ndarray(arr, format='rgb24')
-
-                        self._frames_decoded += 1
-
-                        # Log every second
-                        now = asyncio.get_event_loop().time()
-                        if now - last_log_time >= 1.0:
-                            avg_capture = sum(capture_times) / len(capture_times) * 1000 if capture_times else 0
-                            avg_decode = sum(process_times) / len(process_times) * 1000 if process_times else 0
-                            fps = self._frames_decoded / (now - (last_log_time - 1)) if self._frames_decoded > 30 else 0
-                            logger.info(
-                                f"📹 Frame {self._frames_decoded}: {frame.width}x{frame.height} "
-                                f"(capture: {avg_capture:.0f}ms, decode: {avg_decode:.0f}ms, "
-                                f"~{len(capture_times)/(sum(capture_times) if capture_times else 1):.1f} FPS effective)"
-                            )
-                            last_log_time = now
-
-                        # Put frame in queue (newest wins)
+                    for task in done:
                         try:
-                            self._frame_queue.put_nowait(frame)
-                        except asyncio.QueueFull:
-                            self._frames_dropped += 1
-                            try:
-                                self._frame_queue.get_nowait()
-                                self._frame_queue.put_nowait(frame)
-                            except Exception:
-                                pass
+                            rgb_array, capture_time = await task
+                            pending.add(loop.run_in_executor(executor, quartz_capture))
 
-                except asyncio.TimeoutError:
-                    logger.warning("Screenshot timeout, restarting capture")
-                    pending_captures[next_capture_idx] = asyncio.create_task(capture_screenshot())
-                    next_capture_idx = (next_capture_idx + 1) % NUM_BUFFERS
-                    continue
+                            if rgb_array is not None:
+                                capture_times.append(capture_time)
+                                frame = VideoFrame.from_ndarray(rgb_array, format='rgb24')
+                                self._frames_decoded += 1
+
+                                now = loop.time()
+                                frame_intervals.append(now - last_frame_time)
+                                last_frame_time = now
+
+                                if now - last_log_time >= 1.0:
+                                    avg_capture = sum(capture_times) / len(capture_times) * 1000 if capture_times else 0
+                                    avg_interval = sum(frame_intervals) / len(frame_intervals) if frame_intervals else 1
+                                    effective_fps = 1.0 / avg_interval if avg_interval > 0 else 0
+                                    logger.info(
+                                        f"📹 Frame {self._frames_decoded}: {frame.width}x{frame.height} "
+                                        f"(Quartz latency: {avg_capture:.0f}ms, {effective_fps:.1f} FPS)"
+                                    )
+                                    last_log_time = now
+
+                                try:
+                                    self._frame_queue.put_nowait(frame)
+                                except asyncio.QueueFull:
+                                    self._frames_dropped += 1
+                                    try:
+                                        self._frame_queue.get_nowait()
+                                        self._frame_queue.put_nowait(frame)
+                                    except Exception:
+                                        pass
+
+                        except Exception:
+                            pending.add(loop.run_in_executor(executor, quartz_capture))
+
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
                     if self._frames_decoded == 0:
-                        logger.error(f"Screenshot error: {e}")
+                        logger.error(f"Quartz capture error: {e}")
                         import traceback
                         traceback.print_exc()
-                    pending_captures[next_capture_idx] = asyncio.create_task(capture_screenshot())
-                    next_capture_idx = (next_capture_idx + 1) % NUM_BUFFERS
                     continue
 
         except Exception as e:
-            logger.error(f"Screenshot stream error: {e}")
+            logger.error(f"Quartz stream error: {e}")
             import traceback
             traceback.print_exc()
 
         finally:
             executor.shutdown(wait=False)
-            # Cancel all pending captures
-            for task in pending_captures:
-                if task and not task.done():
+            for task in pending:
+                if hasattr(task, 'cancel'):
                     task.cancel()
-            logger.info(f"Screenshot stream stopped after {self._frames_decoded} frames")
+            logger.info(f"Quartz capture stopped after {self._frames_decoded} frames")
+
+    async def _stream_simctl(self):
+        """
+        Optimized simctl screenshot capture with aggressive parallelism.
+
+        Uses xcrun simctl io screenshot command with 4x parallel captures
+        to maximize throughput despite the ~200-250ms per-capture latency.
+        """
+        try:
+            from collections import deque
+            import concurrent.futures
+            import time
+            from PIL import Image
+            import io
+
+            logger.info("Starting optimized simctl screenshot stream...")
+            logger.info("   Pipeline: simctl screenshot (4x parallel) → decode → frame queue")
+            logger.info("   🚀 Using aggressive parallelism for best throughput")
+
+            # 4 workers for parallel captures
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+
+            capture_times = deque(maxlen=60)
+            frame_intervals = deque(maxlen=60)
+            last_frame_time = asyncio.get_event_loop().time()
+            last_log_time = last_frame_time
+            start_time = last_frame_time
+
+            def simctl_capture():
+                """Capture using simctl (runs in thread pool)."""
+                start = time.time()
+                result = subprocess.run(
+                    ['xcrun', 'simctl', 'io', self.simulator_udid, 'screenshot', '--type=tiff', '-'],
+                    capture_output=True,
+                    timeout=2.0
+                )
+
+                if result.returncode != 0 or not result.stdout:
+                    return None, 0
+
+                img = Image.open(io.BytesIO(result.stdout))
+                rgb = np.array(img.convert('RGB'))
+                elapsed = time.time() - start
+                return rgb, elapsed
+
+            # 4x parallel captures for maximum throughput
+            NUM_PARALLEL = 4
+            loop = asyncio.get_event_loop()
+            pending = set()
+
+            for _ in range(NUM_PARALLEL):
+                pending.add(loop.run_in_executor(executor, simctl_capture))
+
+            while self._running:
+                try:
+                    done, pending = await asyncio.wait(
+                        pending,
+                        return_when=asyncio.FIRST_COMPLETED,
+                        timeout=2.0
+                    )
+
+                    if not done:
+                        pending = set()
+                        for _ in range(NUM_PARALLEL):
+                            pending.add(loop.run_in_executor(executor, simctl_capture))
+                        continue
+
+                    for task in done:
+                        try:
+                            rgb_array, capture_time = await task
+                            pending.add(loop.run_in_executor(executor, simctl_capture))
+
+                            if rgb_array is not None:
+                                capture_times.append(capture_time)
+                                frame = VideoFrame.from_ndarray(rgb_array, format='rgb24')
+                                self._frames_decoded += 1
+
+                                now = loop.time()
+                                frame_intervals.append(now - last_frame_time)
+                                last_frame_time = now
+
+                                if now - last_log_time >= 1.0:
+                                    avg_capture = sum(capture_times) / len(capture_times) * 1000 if capture_times else 0
+                                    avg_interval = sum(frame_intervals) / len(frame_intervals) if frame_intervals else 1
+                                    effective_fps = 1.0 / avg_interval if avg_interval > 0 else 0
+                                    logger.info(
+                                        f"📹 Frame {self._frames_decoded}: {frame.width}x{frame.height} "
+                                        f"(simctl latency: {avg_capture:.0f}ms, {effective_fps:.1f} FPS)"
+                                    )
+                                    last_log_time = now
+
+                                try:
+                                    self._frame_queue.put_nowait(frame)
+                                except asyncio.QueueFull:
+                                    self._frames_dropped += 1
+                                    try:
+                                        self._frame_queue.get_nowait()
+                                        self._frame_queue.put_nowait(frame)
+                                    except Exception:
+                                        pass
+
+                        except Exception:
+                            pending.add(loop.run_in_executor(executor, simctl_capture))
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    if self._frames_decoded == 0:
+                        logger.error(f"simctl capture error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                    continue
+
+        except Exception as e:
+            logger.error(f"simctl stream error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        finally:
+            executor.shutdown(wait=False)
+            for task in pending:
+                if hasattr(task, 'cancel'):
+                    task.cancel()
+            logger.info(f"simctl capture stopped after {self._frames_decoded} frames")
 
     async def _stream_and_decode(self):
         """

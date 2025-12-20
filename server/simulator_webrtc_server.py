@@ -281,34 +281,36 @@ class SimulatorWebRTCServer:
         else:
             logger.warning("⚠️ FFmpeg NOT found - will use raw idb stream (may have corruption)")
 
-        # Start video track - two modes available:
-        # 1. use_mjpeg=True: simctl screenshot mode (10-15 FPS, zero corruption)
-        # 2. use_mjpeg=False: idb H.264 mode (30 FPS, may have brief corruption during transitions)
-        USE_SCREENSHOT_MODE = True  # Set True for zero corruption but lower FPS
+        # ============================================================
+        # CAPTURE METHOD CONFIGURATION
+        # ============================================================
+        # Available options:
+        #   "quartz"   - Fast Quartz window capture (~50-80ms latency, ~45 FPS)
+        #   "simctl"   - simctl screenshot (~250-350ms latency, ~12 FPS)
+        #   "idb_h264" - idb H.264 stream (30 FPS, may have corruption on transitions)
+        #
+        # Recommended: "quartz" for best performance
+        # ============================================================
+        CAPTURE_METHOD = "simctl"
 
-        if USE_SCREENSHOT_MODE:
-            logger.info("🚀 Starting video stream (optimized screenshot mode - corruption-free)...")
-            self.video_track = SimulatorVideoTrack(
-                simulator_udid=self.simulator_udid,
-                fps=15,  # Target 15 FPS with parallel capture
-                port=10882,
-                use_mjpeg=True
-            )
-        else:
-            logger.info("🚀 Starting video stream (idb H.264 mode - 30 FPS, may have brief artifacts)...")
-            self.video_track = SimulatorVideoTrack(
-                simulator_udid=self.simulator_udid,
-                fps=30,
-                port=10882,
-                use_mjpeg=False,
-                use_ffmpeg_transcoding=False
-            )
+        logger.info(f"🚀 Starting video stream (capture method: {CAPTURE_METHOD})...")
+
+        self.video_track = SimulatorVideoTrack(
+            simulator_udid=self.simulator_udid,
+            fps=30,
+            port=10882,
+            capture_method=CAPTURE_METHOD
+        )
 
         await self.video_track.start()
-        if USE_SCREENSHOT_MODE:
-            logger.info("   Pipeline: simctl screenshot (parallel) → decode → aiortc H.264")
+
+        # Log the pipeline being used
+        if CAPTURE_METHOD == "quartz":
+            logger.info("   Pipeline: Quartz window capture → frame queue → aiortc H.264")
+        elif CAPTURE_METHOD == "simctl":
+            logger.info("   Pipeline: simctl screenshot → decode → frame queue → aiortc H.264")
         else:
-            logger.info("   Pipeline: idb H.264 → decode → aiortc H.264 (with patched keyframes)")
+            logger.info("   Pipeline: idb H.264 → decode → frame queue → aiortc H.264")
 
         # Start HTTP server
         runner = web.AppRunner(self.app)
