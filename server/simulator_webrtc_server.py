@@ -15,7 +15,10 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, R
 from aiortc.contrib.media import MediaRelay
 
 # Import our simulator receiver
-from simulator_receiver import SimulatorVideoTrack
+from simulator_receiver import SimulatorVideoTrack, check_ffmpeg_available, find_ffmpeg
+
+# Import H.264 encoder patch for WebRTC keyframe injection
+from h264_encoder_patch import patch_aiortc_h264_encoder
 
 logging.basicConfig(
     level=logging.INFO,
@@ -266,14 +269,46 @@ class SimulatorWebRTCServer:
         logger.info(f"Simulator UDID: {self.simulator_udid}")
         logger.info("")
 
-        # Start video track
-        logger.info("🚀 Starting video stream...")
-        self.video_track = SimulatorVideoTrack(
-            simulator_udid=self.simulator_udid,
-            fps=30,
-            port=10882
-        )
+        # Patch aiortc H.264 encoder to include periodic keyframes
+        # This is critical for preventing corruption during scene transitions
+        logger.info("🔧 Patching aiortc H.264 encoder for periodic keyframes...")
+        patch_aiortc_h264_encoder(keyframe_interval=15)  # Keyframe every 15 frames (0.5 second at 30fps)
+
+        # Check FFmpeg availability
+        ffmpeg_path = find_ffmpeg()
+        if ffmpeg_path:
+            logger.info(f"✅ FFmpeg found at: {ffmpeg_path}")
+        else:
+            logger.warning("⚠️ FFmpeg NOT found - will use raw idb stream (may have corruption)")
+
+        # Start video track - two modes available:
+        # 1. use_mjpeg=True: simctl screenshot mode (10-15 FPS, zero corruption)
+        # 2. use_mjpeg=False: idb H.264 mode (30 FPS, may have brief corruption during transitions)
+        USE_SCREENSHOT_MODE = True  # Set True for zero corruption but lower FPS
+
+        if USE_SCREENSHOT_MODE:
+            logger.info("🚀 Starting video stream (optimized screenshot mode - corruption-free)...")
+            self.video_track = SimulatorVideoTrack(
+                simulator_udid=self.simulator_udid,
+                fps=15,  # Target 15 FPS with parallel capture
+                port=10882,
+                use_mjpeg=True
+            )
+        else:
+            logger.info("🚀 Starting video stream (idb H.264 mode - 30 FPS, may have brief artifacts)...")
+            self.video_track = SimulatorVideoTrack(
+                simulator_udid=self.simulator_udid,
+                fps=30,
+                port=10882,
+                use_mjpeg=False,
+                use_ffmpeg_transcoding=False
+            )
+
         await self.video_track.start()
+        if USE_SCREENSHOT_MODE:
+            logger.info("   Pipeline: simctl screenshot (parallel) → decode → aiortc H.264")
+        else:
+            logger.info("   Pipeline: idb H.264 → decode → aiortc H.264 (with patched keyframes)")
 
         # Start HTTP server
         runner = web.AppRunner(self.app)
