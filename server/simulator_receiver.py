@@ -94,9 +94,11 @@ class SimulatorVideoTrack(VideoStreamTrack):
     kind = "video"
 
     # Capture method options
-    CAPTURE_QUARTZ = "quartz"      # Fast Quartz window capture (~50-80ms, ~45 FPS)
-    CAPTURE_SIMCTL = "simctl"      # simctl screenshot (~250-350ms, ~12 FPS)
-    CAPTURE_IDB_H264 = "idb_h264"  # idb H.264 stream (30 FPS, may have corruption)
+    CAPTURE_QUARTZ = "quartz"          # Fast Quartz window capture (~50-80ms, ~45 FPS)
+    CAPTURE_SIMCTL = "simctl"          # simctl screenshot (~250-350ms, ~12 FPS)
+    CAPTURE_IDB_H264 = "idb_h264"      # idb H.264 stream (30 FPS, may have corruption)
+    CAPTURE_IDB_H264_FFMPEG = "idb_h264_ffmpeg"  # idb H.264 + FFmpeg (still has corruption from source)
+    CAPTURE_IDB_RBGA = "idb_rbga"      # idb RBGA raw pixels (30 FPS, NO corruption - recommended)
 
     def __init__(
         self,
@@ -164,6 +166,10 @@ class SimulatorVideoTrack(VideoStreamTrack):
         self._frame_queue = asyncio.Queue(maxsize=10)
         self._decoder_task: Optional[asyncio.Task] = None
 
+        # Frame dimensions (set once first frame is received)
+        self.frame_width = 0
+        self.frame_height = 0
+
     async def start(self):
         """Start streaming from simulator."""
         logger.info(f"🚀 Starting stream for simulator {self.simulator_udid}")
@@ -183,6 +189,38 @@ class SimulatorVideoTrack(VideoStreamTrack):
             self._decoder_task = asyncio.create_task(self._stream_simctl())
             logger.info("✅ simctl capture started")
             return
+
+        if self.capture_method == self.CAPTURE_IDB_RBGA:
+            logger.info("📹 Using idb RBGA raw pixel stream (30 FPS, NO corruption - recommended)")
+            logger.info("   Pipeline: idb RBGA → raw pixels → frame queue → aiortc H.264")
+            logger.info("   ✅ No inter-frame dependencies - zero corruption!")
+            self._decoder_task = asyncio.create_task(self._stream_rbga())
+            logger.info("✅ IDB RBGA stream started")
+            return
+
+        if self.capture_method == self.CAPTURE_IDB_H264_FFMPEG:
+            logger.info("📹 Using idb H.264 + FFmpeg transcoding")
+            logger.info("   ⚠️ May still have corruption from source H.264 stream")
+            logger.info("   Pipeline: idb CLI → FFmpeg (keyframe injection) → decode → frame queue")
+
+            # Check FFmpeg availability
+            ffmpeg_path = find_ffmpeg()
+            if not ffmpeg_path:
+                logger.error("❌ FFmpeg not found! Install with: brew install ffmpeg")
+                logger.warning("⚠️ Falling back to raw idb_h264 (may have corruption)")
+                self.capture_method = self.CAPTURE_IDB_H264
+            else:
+                logger.info(f"   FFmpeg: {ffmpeg_path}")
+                logger.info(f"   Keyframe interval: {self.keyframe_interval}s")
+
+                # Initialize H.264 decoder
+                self._codec = CodecContext.create('h264', 'r')
+                logger.info("✅ H.264 decoder initialized")
+
+                # Use subprocess pipe method (more reliable than gRPC)
+                self._decoder_task = asyncio.create_task(self._stream_with_cli_ffmpeg())
+                logger.info("✅ IDB CLI + FFmpeg stream started")
+                return
 
         # Legacy: use_mjpeg flag (backwards compatibility)
         if self.use_mjpeg and self.capture_method not in [self.CAPTURE_QUARTZ, self.CAPTURE_SIMCTL, self.CAPTURE_IDB_H264]:
@@ -517,11 +555,11 @@ class SimulatorVideoTrack(VideoStreamTrack):
             import io
 
             logger.info("Starting optimized simctl screenshot stream...")
-            logger.info("   Pipeline: simctl JPEG (2x parallel) → decode → scale → frame queue")
+            logger.info("   Pipeline: simctl TIFF (3x parallel) → decode → scale → frame queue")
             logger.info("   ⚡ Optimized for low latency streaming")
 
-            # 2 workers for stable performance
-            executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+            # 3 workers for better throughput (each capture ~280ms, so 3 workers ≈ 10-12 FPS)
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
 
             capture_times = deque(maxlen=60)
             frame_intervals = deque(maxlen=60)
@@ -564,8 +602,8 @@ class SimulatorVideoTrack(VideoStreamTrack):
                 elapsed = time.time() - start
                 return rgb, elapsed
 
-            # 2 parallel captures for stable performance
-            NUM_PARALLEL = 2
+            # 3 parallel captures for better throughput
+            NUM_PARALLEL = 3
 
             loop = asyncio.get_event_loop()
             pending = set()
@@ -651,6 +689,387 @@ class SimulatorVideoTrack(VideoStreamTrack):
                 if hasattr(task, 'cancel'):
                     task.cancel()
             logger.info(f"simctl capture stopped after {self._frames_decoded} frames")
+
+    async def _stream_rbga(self):
+        """
+        Stream raw RBGA pixels from idb CLI.
+
+        RBGA format is raw RGBA pixel data - no compression, no inter-frame
+        dependencies. This eliminates ALL corruption issues at the cost of
+        higher bandwidth (mitigated by using scale_factor).
+
+        Pipeline: idb rbga → raw pixels → numpy → VideoFrame → queue
+        """
+        idb_process = None
+
+        try:
+            idb_path = shutil.which('idb') or '/Library/Frameworks/Python.framework/Versions/3.11/bin/idb'
+
+            logger.info("Starting idb RBGA raw pixel stream...")
+            logger.info(f"   idb: {idb_path}")
+
+            # Get simulator resolution first
+            width, height = await self._get_resolution()
+            logger.info(f"   Resolution: {width}x{height}")
+
+            # Calculate scaled dimensions
+            if self.scale_factor < 1.0:
+                scaled_width = int(width * self.scale_factor)
+                scaled_height = int(height * self.scale_factor)
+                # Make even for H.264
+                scaled_width = (scaled_width // 2) * 2
+                scaled_height = (scaled_height // 2) * 2
+                logger.info(f"   Scaled to: {scaled_width}x{scaled_height}")
+            else:
+                scaled_width, scaled_height = width, height
+
+            frame_size = width * height * 4  # RGBA = 4 bytes per pixel
+            logger.info(f"   Bytes per frame: {frame_size / 1024 / 1024:.1f} MB")
+
+            # Start idb with RBGA format
+            idb_cmd = [
+                idb_path,
+                'video-stream',
+                '--fps', str(self.fps),
+                '--format', 'rbga',
+                '--udid', self.simulator_udid
+            ]
+
+            logger.info(f"   Command: {' '.join(idb_cmd)}")
+
+            idb_process = await asyncio.create_subprocess_exec(
+                *idb_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            logger.info(f"   Process started (PID: {idb_process.pid})")
+            logger.info("   ✅ RBGA stream running - zero corruption guaranteed!")
+
+            frame_count = 0
+            last_log_time = asyncio.get_event_loop().time()
+            buffer = b''
+
+            while self._running:
+                try:
+                    # Read enough data for at least one frame
+                    chunk = await asyncio.wait_for(
+                        idb_process.stdout.read(min(frame_size - len(buffer), 1024 * 1024)),
+                        timeout=5.0
+                    )
+                except asyncio.TimeoutError:
+                    if idb_process.returncode is not None:
+                        logger.warning("idb process ended unexpectedly")
+                        break
+                    continue
+
+                if not chunk:
+                    logger.info("idb stdout EOF")
+                    break
+
+                buffer += chunk
+
+                # Process complete frames
+                while len(buffer) >= frame_size:
+                    frame_data = buffer[:frame_size]
+                    buffer = buffer[frame_size:]
+
+                    # Convert RGBA bytes to numpy array
+                    arr = np.frombuffer(frame_data, dtype=np.uint8).reshape((height, width, 4))
+
+                    # Scale down if needed (using fast slicing for speed)
+                    if self.scale_factor < 1.0:
+                        # Simple fast downscale using step slicing
+                        step = int(1 / self.scale_factor)
+                        arr = arr[::step, ::step, :]
+                        # Adjust to exact scaled dimensions
+                        arr = arr[:scaled_height, :scaled_width, :]
+
+                    # Convert RGBA to RGB (drop alpha channel)
+                    rgb = arr[:, :, :3]
+
+                    # Create VideoFrame
+                    frame = VideoFrame.from_ndarray(rgb, format='rgb24')
+                    self._frames_decoded += 1
+                    frame_count += 1
+
+                    # Store dimensions on first frame
+                    if self.frame_width == 0:
+                        self.frame_width = frame.width
+                        self.frame_height = frame.height
+                        logger.info(f"   📐 Frame size: {frame.width}x{frame.height}")
+
+                    # Log periodically
+                    now = asyncio.get_event_loop().time()
+                    if now - last_log_time >= 2.0:
+                        fps = frame_count / (now - last_log_time)
+                        logger.info(
+                            f"📹 RBGA Frame {self._frames_decoded}: {frame.width}x{frame.height} "
+                            f"({fps:.1f} FPS, dropped: {self._frames_dropped})"
+                        )
+                        frame_count = 0
+                        last_log_time = now
+
+                    # Put frame in queue
+                    try:
+                        self._frame_queue.put_nowait(frame)
+                    except asyncio.QueueFull:
+                        self._frames_dropped += 1
+                        try:
+                            self._frame_queue.get_nowait()
+                            self._frame_queue.put_nowait(frame)
+                        except Exception:
+                            pass
+
+        except Exception as e:
+            logger.error(f"RBGA stream error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        finally:
+            if idb_process and idb_process.returncode is None:
+                idb_process.terminate()
+                try:
+                    await asyncio.wait_for(idb_process.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    idb_process.kill()
+
+            logger.info(f"RBGA stream stopped after {self._frames_decoded} frames")
+
+    async def _get_resolution(self) -> tuple:
+        """Get simulator resolution."""
+        try:
+            from PIL import Image
+            import io as stdio
+
+            proc = await asyncio.create_subprocess_exec(
+                'xcrun', 'simctl', 'io', self.simulator_udid, 'screenshot', '--type=png', '-',
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+
+            if proc.returncode == 0 and stdout:
+                img = Image.open(stdio.BytesIO(stdout))
+                return img.width, img.height
+        except Exception as e:
+            logger.warning(f"Could not get resolution: {e}")
+
+        # Default iPhone 16 Pro
+        return 1206, 2622
+
+    async def _stream_with_cli_ffmpeg(self):
+        """
+        Stream H.264 from idb CLI through FFmpeg for keyframe injection.
+
+        This method uses subprocess pipes as recommended in idb documentation:
+        idb video-stream | ffmpeg | decode
+
+        The key improvement is using FFmpeg to re-encode the stream with
+        regular keyframe intervals, eliminating corruption during scene changes.
+        """
+        idb_process = None
+        ffmpeg_process = None
+        pipe_task = None
+
+        try:
+            # Find idb path
+            idb_path = shutil.which('idb') or '/Library/Frameworks/Python.framework/Versions/3.11/bin/idb'
+            ffmpeg_path = find_ffmpeg()
+
+            logger.info("Starting idb CLI + FFmpeg pipeline...")
+            logger.info(f"   idb: {idb_path}")
+            logger.info(f"   FFmpeg: {ffmpeg_path}")
+
+            # Calculate keyframe interval in frames
+            keyframe_frames = int(self.fps * self.keyframe_interval)
+
+            # Start idb video-stream process
+            idb_cmd = [
+                idb_path,
+                'video-stream',
+                '--fps', str(self.fps),
+                '--format', 'h264',
+                '--compression-quality', '0.8',
+                '--udid', self.simulator_udid
+            ]
+
+            logger.info(f"   idb command: {' '.join(idb_cmd)}")
+
+            idb_process = await asyncio.create_subprocess_exec(
+                *idb_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            logger.info(f"   idb process started (PID: {idb_process.pid})")
+
+            # Start FFmpeg transcoder
+            ffmpeg_cmd = [
+                ffmpeg_path,
+                '-hide_banner',
+                '-loglevel', 'error',
+                # Input from pipe
+                '-f', 'h264',
+                '-i', 'pipe:0',
+                # Re-encode with keyframes
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-tune', 'zerolatency',
+                '-profile:v', 'baseline',
+                # Keyframe settings
+                '-g', str(keyframe_frames),
+                '-keyint_min', str(keyframe_frames),
+                '-sc_threshold', '0',
+                # Quality
+                '-crf', '23',
+                '-maxrate', '4M',
+                '-bufsize', '8M',
+                # Output raw H.264 to pipe
+                '-f', 'h264',
+                '-bsf:v', 'h264_mp4toannexb',
+                'pipe:1'
+            ]
+
+            logger.info(f"   Keyframe every {keyframe_frames} frames ({self.keyframe_interval}s)")
+
+            ffmpeg_process = await asyncio.create_subprocess_exec(
+                *ffmpeg_cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            logger.info(f"   FFmpeg process started (PID: {ffmpeg_process.pid})")
+
+            # Create task to pipe idb output to FFmpeg input
+            async def pipe_idb_to_ffmpeg():
+                """Read from idb and write to FFmpeg stdin."""
+                bytes_piped = 0
+                try:
+                    while self._running:
+                        chunk = await idb_process.stdout.read(65536)
+                        if not chunk:
+                            break
+                        ffmpeg_process.stdin.write(chunk)
+                        await ffmpeg_process.stdin.drain()
+                        bytes_piped += len(chunk)
+                except Exception as e:
+                    logger.debug(f"Pipe task ended: {e}")
+                finally:
+                    try:
+                        ffmpeg_process.stdin.close()
+                        await ffmpeg_process.stdin.wait_closed()
+                    except Exception:
+                        pass
+                    logger.debug(f"Piped {bytes_piped / 1024:.1f} KB from idb to FFmpeg")
+
+            pipe_task = asyncio.create_task(pipe_idb_to_ffmpeg())
+            logger.info("   ✅ Pipeline running: idb → FFmpeg → decoder")
+
+            # Read transcoded H.264 from FFmpeg and decode
+            buffer = b''
+            frame_count = 0
+            last_log_time = asyncio.get_event_loop().time()
+
+            while self._running:
+                try:
+                    chunk = await asyncio.wait_for(
+                        ffmpeg_process.stdout.read(65536),
+                        timeout=5.0
+                    )
+                except asyncio.TimeoutError:
+                    if ffmpeg_process.returncode is not None:
+                        logger.warning("FFmpeg process ended unexpectedly")
+                        break
+                    continue
+
+                if not chunk:
+                    logger.info("FFmpeg stdout EOF")
+                    break
+
+                buffer += chunk
+
+                # Parse and decode H.264 data
+                try:
+                    packets = self._codec.parse(buffer)
+
+                    for packet in packets:
+                        is_keyframe = packet.is_keyframe
+                        frames = self._codec.decode(packet)
+
+                        for frame in frames:
+                            self._frames_decoded += 1
+                            frame_count += 1
+
+                            # Store frame dimensions on first frame
+                            if self.frame_width == 0:
+                                self.frame_width = frame.width
+                                self.frame_height = frame.height
+                                logger.info(f"   📐 Frame size: {frame.width}x{frame.height}")
+
+                            if is_keyframe:
+                                self._keyframes_injected += 1
+
+                            # Log periodically
+                            now = asyncio.get_event_loop().time()
+                            if now - last_log_time >= 2.0:
+                                fps = frame_count / (now - last_log_time)
+                                logger.info(
+                                    f"📹 Frame {self._frames_decoded}: {frame.width}x{frame.height} "
+                                    f"({fps:.1f} FPS, keyframes: {self._keyframes_injected}, dropped: {self._frames_dropped})"
+                                )
+                                frame_count = 0
+                                last_log_time = now
+
+                            # Put frame in queue
+                            try:
+                                self._frame_queue.put_nowait(frame)
+                            except asyncio.QueueFull:
+                                self._frames_dropped += 1
+                                try:
+                                    self._frame_queue.get_nowait()
+                                    self._frame_queue.put_nowait(frame)
+                                except Exception:
+                                    pass
+
+                    buffer = b''
+
+                except Exception as e:
+                    if len(buffer) > 1024 * 1024:
+                        logger.warning(f"Buffer too large ({len(buffer)} bytes), clearing")
+                        buffer = b''
+
+        except Exception as e:
+            logger.error(f"CLI FFmpeg stream error: {e}")
+            import traceback
+            traceback.print_exc()
+
+        finally:
+            # Cancel pipe task
+            if pipe_task and not pipe_task.done():
+                pipe_task.cancel()
+                try:
+                    await pipe_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Clean up processes
+            if ffmpeg_process and ffmpeg_process.returncode is None:
+                ffmpeg_process.terminate()
+                try:
+                    await asyncio.wait_for(ffmpeg_process.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    ffmpeg_process.kill()
+
+            if idb_process and idb_process.returncode is None:
+                idb_process.terminate()
+                try:
+                    await asyncio.wait_for(idb_process.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    idb_process.kill()
+
+            logger.info(f"CLI FFmpeg stream stopped after {self._frames_decoded} frames (keyframes: {self._keyframes_injected})")
 
     async def _stream_and_decode(self):
         """

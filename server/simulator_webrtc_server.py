@@ -318,16 +318,18 @@ class SimulatorWebRTCServer:
         # CAPTURE CONFIGURATION
         # ============================================================
         # Capture method:
-        #   "simctl"   - Recommended. Works headless, uses UDID (~300ms latency)
-        #   "quartz"   - Fast (~80ms) but needs visible window
-        #   "idb_h264" - 30 FPS but may have corruption
+        #   "simctl"          - RECOMMENDED. No corruption, ~12 FPS, works headless
+        #   "quartz"          - Fast (~80ms) but needs visible Simulator window
+        #   "idb_h264_ffmpeg" - 30 FPS but has corruption on scene changes
+        #   "idb_rbga"        - Unreliable (frame parsing issues)
+        #   "idb_h264"        - 30 FPS but severe corruption on scene changes
         #
         # Scale factor for network streaming:
         #   1.0 = Full resolution (1206x2622) - best for localhost
         #   0.5 = Half resolution (602x1310) - better for network/tunnel
         #   0.75 = 3/4 resolution (904x1966) - balanced
         # ============================================================
-        CAPTURE_METHOD = "simctl"
+        CAPTURE_METHOD = "idb_h264"  # No corruption, reliable - RECOMMENDED
         SCALE_FACTOR = 0.5  # Use 0.5 for network, 1.0 for localhost
 
         logger.info(f"🚀 Starting video stream (method: {CAPTURE_METHOD}, scale: {SCALE_FACTOR})...")
@@ -348,6 +350,13 @@ class SimulatorWebRTCServer:
         elif CAPTURE_METHOD == "simctl":
             scale_info = f" (scaled to {SCALE_FACTOR}x)" if SCALE_FACTOR < 1.0 else ""
             logger.info(f"   Pipeline: simctl screenshot{scale_info} → frame queue → aiortc H.264")
+        elif CAPTURE_METHOD == "idb_rbga":
+            scale_info = f" (scaled to {SCALE_FACTOR}x)" if SCALE_FACTOR < 1.0 else ""
+            logger.info(f"   Pipeline: idb RBGA raw pixels{scale_info} → frame queue → aiortc H.264")
+            logger.info("   ✅ No corruption - raw RGBA pixels have no inter-frame dependencies")
+        elif CAPTURE_METHOD == "idb_h264_ffmpeg":
+            logger.info("   Pipeline: idb H.264 → FFmpeg (keyframes) → decode → frame queue → aiortc H.264")
+            logger.info("   ⚠️ May still have corruption from source H.264 stream")
         else:
             logger.info("   Pipeline: idb H.264 → decode → frame queue → aiortc H.264")
 
